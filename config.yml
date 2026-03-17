@@ -1,0 +1,13 @@
+tunnel: a8834b81-c604-49c0-8ca8-d2629445f112
+credentials-file: /Users/chenpinrong/.cloudflared/a8834b81-c604-49c0-8ca8-d2629445f112.json
+
+ingress:
+  # 展示端：Streamlit
+  - hostname: etymon-decoder.com
+    service: http://localhost:8501
+  
+  # 後端：FastAPI
+  - hostname: api.etymon-decoder.com
+    service: http://localhost:8000
+
+  - service: http_status:404

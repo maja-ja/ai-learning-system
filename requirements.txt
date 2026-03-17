@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+google-genai
+streamlit
+pandas
+markdown
+gtts
+Pillow
