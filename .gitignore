@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+.Python
+.env
+.venv/
+venv/
+node_modules/
+web/dist/
+
+# 本機資料庫（SQLite）
+backend/local.db
+backend/local_knowledge.db
+*.db-journal
+
+.DS_Store
+
+# Cloudflare Tunnel 本機設定（含 tunnel UUID、憑證路徑，勿提交）
+/config.yml
+/kadusella/config.yml
+# Tunnel 憑證 JSON
+.cloudflared/
+
+# kadusella 金鑰
+kadusella/.env.local
+
+# 外部/實驗子專案（含獨立 .git），避免汙染主 repo
+/mathpath-/
+
+# Swift Package Manager 建置產物
+swift/**/.build/
+*.xcodeproj/
+.swiftpm/
+DerivedData/

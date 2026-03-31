@@ -1,0 +1,36 @@
+{
+  "name": "kadusella",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "sb:remote": "node --env-file=.env.local ./scripts/supabase-remote.mjs",
+    "sb:peek": "node --env-file=.env.local ./scripts/supabase-remote.mjs peek",
+    "sb:update": "node --env-file=.env.local ./scripts/supabase-remote.mjs update",
+    "sb:upsert": "node --env-file=.env.local ./scripts/supabase-remote.mjs upsert",
+    "sb:delete": "node --env-file=.env.local ./scripts/supabase-remote.mjs delete",
+    "sb:import-etymon": "node --env-file=.env.local ./scripts/supabase-remote.mjs import-etymon",
+    "import:csv-to-etymon": "python3 scripts/knowledge_csv_to_etymon_json.py",
+    "polish:csv": "python3 scripts/ollama_polish_csv.py"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^7.0.6",
+    "@supabase/supabase-js": "^2.99.3",
+    "next": "16.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

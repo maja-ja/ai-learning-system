@@ -1,0 +1,236 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply min-h-screen bg-white text-black font-sans;
+}
+
+/* ── Dark-theme remnant overrides ────────────────────────
+   The codebase was built dark-first. These rules correct
+   the remaining light-on-light cases. */
+@layer base {
+  /* text-white was "light text on dark bg"; now maps to black */
+  .text-white              { color: #000 !important; }
+  .hover\:text-white:hover { color: #fff !important; } /* keep for invert-hover buttons */
+  .group:hover .group-hover\:text-white { color: #fff !important; }
+
+  /* transparent-white borders → transparent-black borders */
+  .border-white\/5  { border-color: rgba(0,0,0,0.06)  !important; }
+  .border-white\/10 { border-color: rgba(0,0,0,0.10)  !important; }
+  .border-white\/15 { border-color: rgba(0,0,0,0.14)  !important; }
+  .border-white\/20 { border-color: rgba(0,0,0,0.18)  !important; }
+  .border-white\/25 { border-color: rgba(0,0,0,0.22)  !important; }
+  .border-white\/30 { border-color: rgba(0,0,0,0.28)  !important; }
+
+  /* backdrop-blur is not needed on a white background */
+  .backdrop-blur-xl { backdrop-filter: none !important; }
+  .backdrop-blur    { backdrop-filter: none !important; }
+
+  /* Ring/ring-offset for dark theme */
+  .ring-offset-ink-950 { --tw-ring-offset-color: #fff !important; }
+}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #888; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { scrollbar-width: none; }
+
+/* ── Selection ─────────────────────────────────────────── */
+::selection { background: rgba(0,0,0,0.10); color: #000; }
+
+/* ── Focus ring ────────────────────────────────────────── */
+:focus-visible {
+  outline: 1.5px solid black;
+  outline-offset: 2px;
+}
+
+/* ── Buttons: press feedback ───────────────────────────── */
+@layer base {
+  button { @apply transition-all duration-100; }
+  button:not(:disabled):active { transform: scale(0.97); }
+  input, textarea, select { @apply transition-colors duration-100; }
+}
+
+/* ── Panel (replaces glass-panel) ──────────────────────── */
+.glass-panel {
+  border: 1.5px solid #000;
+  border-radius: 2px;
+  background: #fff;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* ── Text gradient → plain black ───────────────────────── */
+.text-gradient {
+  background: none;
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: #000;
+  color: #000;
+}
+
+/* ── Page entrance ─────────────────────────────────────── */
+@layer utilities {
+  .animate-fade-up { animation: fade-up 0.2s ease-out both; }
+  .page-enter      { animation: fade-up 0.2s ease-out both; }
+}
+
+/* ── Skeleton ──────────────────────────────────────────── */
+.skeleton {
+  border-radius: 1px;
+  background-color: #e8e8e8;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.7) 50%,
+    rgba(255,255,255,0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+
+/* ── Stagger entrance ──────────────────────────────────── */
+.stagger-item {
+  opacity: 0;
+  animation: fade-up 0.2s ease-out forwards;
+}
+
+/* Minimal theme button overrides */
+/* Primary action buttons */
+.btn-primary {
+  @apply border border-black bg-black text-white px-4 py-2 text-sm font-medium transition-colors duration-100;
+}
+.btn-primary:hover:not(:disabled) {
+  @apply bg-white text-black;
+}
+.btn-ghost {
+  @apply border border-black bg-white text-black px-4 py-2 text-sm font-medium transition-colors duration-100;
+}
+.btn-ghost:hover:not(:disabled) {
+  @apply bg-black text-white;
+}
+
+/* Input fields */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea,
+select {
+  border-color: #000 !important;
+  border-radius: 1px !important;
+  background: #fff !important;
+  color: #000 !important;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #aaa !important;
+}
+select option {
+  background: #fff;
+  color: #000;
+}
+
+/* Tags / chips */
+[class*="rounded-full"] {
+  border-radius: 2px !important;
+}
+
+/* Colored gradient buttons → minimal black buttons */
+[class*="bg-gradient-to-r"],
+[class*="bg-gradient-to-br"],
+[class*="bg-indigo-"],
+[class*="bg-violet-"],
+[class*="bg-emerald-"],
+[class*="bg-sky-"],
+[class*="bg-amber-"],
+[class*="bg-rose-"],
+[class*="bg-accent"] {
+  background: #000 !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: #000 !important;
+}
+[class*="bg-gradient-to-r"]:hover:not(:disabled),
+[class*="bg-gradient-to-br"]:hover:not(:disabled),
+[class*="bg-indigo-"]:hover:not(:disabled),
+[class*="bg-violet-"]:hover:not(:disabled),
+[class*="bg-emerald-"]:hover:not(:disabled),
+[class*="bg-sky-"]:hover:not(:disabled),
+[class*="bg-amber-"]:hover:not(:disabled),
+[class*="bg-rose-"]:hover:not(:disabled) {
+  background: #333 !important;
+  background-image: none !important;
+}
+
+/* Remove all colored text accents */
+[class*="text-emerald-"],
+[class*="text-violet-"],
+[class*="text-sky-"],
+[class*="text-indigo-"],
+[class*="text-amber-"],
+[class*="text-fuchsia-"],
+[class*="text-rose-"],
+[class*="text-red-"],
+[class*="text-accent"] {
+  color: #222 !important;
+}
+/* Exception: red/rose for actual error states */
+.text-red-300, .text-red-400 { color: #c00 !important; }
+.text-emerald-300, .text-emerald-400 { color: #090 !important; }
+.text-amber-200, .text-amber-100 { color: #660 !important; }
+
+/* Remove colored borders */
+[class*="border-emerald-"],
+[class*="border-violet-"],
+[class*="border-sky-"],
+[class*="border-indigo-"],
+[class*="border-amber-"],
+[class*="border-fuchsia-"],
+[class*="border-rose-"],
+[class*="border-accent"] {
+  border-color: #ccc !important;
+}
+[class*="border-red-"] { border-color: #f88 !important; }
+
+/* Colored panel backgrounds → white */
+[class*="bg-emerald-"],
+[class*="bg-violet-"],
+[class*="bg-sky-"],
+[class*="bg-indigo-"],
+[class*="bg-amber-"],
+[class*="bg-fuchsia-"],
+[class*="bg-rose-"],
+[class*="bg-red-"] {
+  background-color: #f8f8f8 !important;
+  background-image: none !important;
+}
+
+/* ring colors */
+[class*="ring-accent"],
+[class*="ring-emerald-"],
+[class*="ring-sky-"],
+[class*="ring-indigo-"] {
+  --tw-ring-color: rgba(0,0,0,0.25) !important;
+}
+.prose-invert {
+  --tw-prose-body: #000;
+  --tw-prose-headings: #000;
+  --tw-prose-links: #000;
+  --tw-prose-bold: #000;
+  --tw-prose-counters: #444;
+  --tw-prose-bullets: #444;
+  --tw-prose-quotes: #222;
+  --tw-prose-code: #000;
+  --tw-prose-hr: #ccc;
+  --tw-prose-th-borders: #ccc;
+  --tw-prose-td-borders: #e5e5e5;
+}

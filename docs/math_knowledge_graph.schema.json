@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etymon-decoder.com/schemas/math_knowledge_graph.schema.json",
+  "title": "MathKnowledgeGraph",
+  "type": "object",
+  "required": ["graph_version", "domain", "quality_gate", "nodes", "edges", "taxonomy"],
+  "properties": {
+    "graph_version": { "type": "string" },
+    "domain": { "type": "string", "const": "math" },
+    "curriculum": { "type": "string" },
+    "quality_gate": {
+      "type": "object",
+      "required": [
+        "functionality",
+        "technical_level",
+        "technical_level_min_required",
+        "humanized_beautiful_structure_baseline"
+      ],
+      "properties": {
+        "functionality": { "type": "integer", "const": 1 },
+        "technical_level": { "type": "number", "minimum": 0, "maximum": 100 },
+        "technical_level_min_required": { "type": "number", "minimum": 0, "maximum": 100 },
+        "humanized_beautiful_structure_baseline": { "type": "number", "const": 60.0 },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "node_count": { "type": "integer", "minimum": 0 },
+            "edge_count": { "type": "integer", "minimum": 0 },
+            "edge_density": { "type": "number", "minimum": 0 },
+            "avg_aha_triggers_per_node": { "type": "number", "minimum": 0 },
+            "history_present_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+            "cold_knowledge_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+            "assessment_probe_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "taxonomy": {
+      "type": "object",
+      "required": ["age_bands", "regions", "scopes", "subdomains", "scope_subdomains"],
+      "properties": {
+        "age_bands": { "type": "array", "items": { "type": "string" } },
+        "regions": { "type": "array", "items": { "type": "string" } },
+        "scopes": { "type": "array", "items": { "type": "string" } },
+        "subdomains": { "type": "array", "items": { "type": "string" } },
+        "scope_subdomains": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": [
+        "id",
+        "domain",
+        "scope_primary",
+        "scope_tags",
+        "subdomain",
+        "title",
+        "summary",
+        "detail",
+        "level",
+        "history_origin",
+        "aha_triggers",
+        "cold_knowledge"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string" },
+        "domain": { "type": "string", "const": "math" },
+        "scope_primary": { "type": "string" },
+        "scope_tags": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "subdomain": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "detail": { "type": "string" },
+        "level": { "type": "integer", "minimum": 0 },
+        "formula": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "difficulty": { "type": "string", "enum": ["basic", "intermediate", "advanced"] },
+        "exam_relevance": { "type": "number", "minimum": 0, "maximum": 100 },
+        "history_origin": { "$ref": "#/$defs/historyOrigin" },
+        "cold_knowledge": { "type": "array", "items": { "type": "string" } },
+        "aha_triggers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ahaTrigger" },
+          "minItems": 1
+        },
+        "representations": { "type": "array", "items": { "$ref": "#/$defs/representationAsset" } },
+        "misconceptions": { "type": "array", "items": { "type": "string" } },
+        "assessment_probes": { "type": "array", "items": { "$ref": "#/$defs/assessmentProbe" } }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to", "type", "weight"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["prerequisite", "historical_influence", "analogy_bridge", "exam_cooccurrence", "application_to"]
+        },
+        "weight": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "type": "string" }
+      }
+    },
+    "historyOrigin": {
+      "type": "object",
+      "required": ["era", "origin_people", "origin_problem", "timeline_events"],
+      "properties": {
+        "era": { "type": "string" },
+        "origin_people": { "type": "array", "items": { "type": "string" } },
+        "origin_problem": { "type": "string" },
+        "timeline_events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["year", "event"],
+            "properties": {
+              "year": { "type": "string" },
+              "event": { "type": "string" }
+            }
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "ahaTrigger": {
+      "type": "object",
+      "required": ["trigger_id", "variant_id", "hook_type", "prompt", "target_profiles"],
+      "properties": {
+        "trigger_id": { "type": "string" },
+        "variant_id": { "type": "string" },
+        "hook_type": {
+          "type": "string",
+          "enum": [
+            "analogy",
+            "visual",
+            "story",
+            "misconception_fix",
+            "exam_shortcut",
+            "cold_fact",
+            "counterexample",
+            "interactive_sim"
+          ]
+        },
+        "prompt": { "type": "string" },
+        "expected_shift": { "type": "string" },
+        "success_signals": { "type": "array", "items": { "type": "string" } },
+        "target_profiles": {
+          "type": "object",
+          "required": ["age_band", "region_code"],
+          "properties": {
+            "age_band": { "type": "array", "items": { "type": "string" } },
+            "region_code": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "representationAsset": {
+      "type": "object",
+      "required": ["format", "content"],
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["text", "visual", "example", "counterexample", "timeline", "audio", "interactive"]
+        },
+        "content": { "type": "string" }
+      }
+    },
+    "assessmentProbe": {
+      "type": "object",
+      "required": ["probe_id", "question", "answer_mode"],
+      "properties": {
+        "probe_id": { "type": "string" },
+        "question": { "type": "string" },
+        "answer_mode": { "type": "string", "enum": ["short_text", "mcq", "numeric", "proof_sketch"] }
+      }
+    }
+  }
+}

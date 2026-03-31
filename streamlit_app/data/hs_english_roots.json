@@ -1,0 +1,536 @@
+[
+  {
+    "id": "act_ag",
+    "root": "act / ag",
+    "variants": ["act", "ag"],
+    "origin": "Latin",
+    "meaning": "做、行動、驅動",
+    "note": "agent, active, react 都與「行動」有關。",
+    "words": [
+      {"w": "active", "zh": "活躍的"},
+      {"w": "agent", "zh": "代理人；劑"},
+      {"w": "react", "zh": "反應"},
+      {"w": "agenda", "zh": "議程"}
+    ]
+  },
+  {
+    "id": "aud_audit",
+    "root": "aud",
+    "variants": ["audi", "audit"],
+    "origin": "Latin",
+    "meaning": "聽",
+    "note": "與聽覺、聽眾相關。",
+    "words": [
+      {"w": "audible", "zh": "聽得見的"},
+      {"w": "audience", "zh": "聽眾"},
+      {"w": "audit", "zh": "審計（原義「聽報告」）"}
+    ]
+  },
+  {
+    "id": "bene",
+    "root": "bene",
+    "variants": ["ben"],
+    "origin": "Latin",
+    "meaning": "好",
+    "note": "與 benefit, benign 同源。",
+    "words": [
+      {"w": "benefit", "zh": "益處"},
+      {"w": "benevolent", "zh": "仁慈的"},
+      {"w": "benign", "zh": "良性的；和善的"}
+    ]
+  },
+  {
+    "id": "bio",
+    "root": "bio",
+    "variants": [],
+    "origin": "Greek",
+    "meaning": "生命",
+    "note": "生物、傳記（人生故事）。",
+    "words": [
+      {"w": "biology", "zh": "生物學"},
+      {"w": "biography", "zh": "傳記"},
+      {"w": "symbiosis", "zh": "共生"}
+    ]
+  },
+  {
+    "id": "cap_capt",
+    "root": "cap / capt",
+    "variants": ["cept", "cip", "ceive"],
+    "origin": "Latin",
+    "meaning": "拿、取、握",
+    "note": "capture, concept 都含「抓住」意象。",
+    "words": [
+      {"w": "capture", "zh": "捕獲"},
+      {"w": "concept", "zh": "概念"},
+      {"w": "receive", "zh": "接收"},
+      {"w": "capacity", "zh": "容量；能力"}
+    ]
+  },
+  {
+    "id": "ced_cess",
+    "root": "ced / cess",
+    "variants": ["ceed", "cess"],
+    "origin": "Latin",
+    "meaning": "走、讓、進行",
+    "note": "proceed, success 與「前行」有關。",
+    "words": [
+      {"w": "proceed", "zh": "進行"},
+      {"w": "precede", "zh": "在…之前"},
+      {"w": "success", "zh": "成功"},
+      {"w": "recession", "zh": "衰退"}
+    ]
+  },
+  {
+    "id": "chron",
+    "root": "chron",
+    "variants": [],
+    "origin": "Greek",
+    "meaning": "時間",
+    "note": "chronic 指「拖很久的」。",
+    "words": [
+      {"w": "chronic", "zh": "慢性的；長期的"},
+      {"w": "chronology", "zh": "年代學"},
+      {"w": "synchronize", "zh": "同步"}
+    ]
+  },
+  {
+    "id": "cred",
+    "root": "cred",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "相信、信任",
+    "note": "credit 本義是「相信會還錢」。",
+    "words": [
+      {"w": "credible", "zh": "可信的"},
+      {"w": "credit", "zh": "信用；學分"},
+      {"w": "incredible", "zh": "難以置信的"}
+    ]
+  },
+  {
+    "id": "dict",
+    "root": "dict",
+    "variants": ["dic"],
+    "origin": "Latin",
+    "meaning": "說、宣告",
+    "note": "dictionary, predict 與「說出」有關。",
+    "words": [
+      {"w": "dictionary", "zh": "字典"},
+      {"w": "predict", "zh": "預測"},
+      {"w": "contradict", "zh": "矛盾；反駁"}
+    ]
+  },
+  {
+    "id": "duc_duct",
+    "root": "duc / duct",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "引導、帶領",
+    "note": "educate 原為「引出（潛能）」。",
+    "words": [
+      {"w": "educate", "zh": "教育"},
+      {"w": "conduct", "zh": "進行；行為"},
+      {"w": "reduce", "zh": "減少"},
+      {"w": "product", "zh": "產品"}
+    ]
+  },
+  {
+    "id": "fac_fect_fic",
+    "root": "fac / fect / fic",
+    "variants": ["fy"],
+    "origin": "Latin",
+    "meaning": "做、製造",
+    "note": "factory, perfect 都與「做出來」有關。",
+    "words": [
+      {"w": "factory", "zh": "工廠"},
+      {"w": "perfect", "zh": "完美的"},
+      {"w": "sufficient", "zh": "足夠的"},
+      {"w": "artificial", "zh": "人造的"}
+    ]
+  },
+  {
+    "id": "fer",
+    "root": "fer",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "帶、拿、承受",
+    "note": "transfer, refer 含「帶到另一處」。",
+    "words": [
+      {"w": "transfer", "zh": "轉移"},
+      {"w": "refer", "zh": "參考；指稱"},
+      {"w": "infer", "zh": "推論"},
+      {"w": "confer", "zh": "授予；商議"}
+    ]
+  },
+  {
+    "id": "form",
+    "root": "form",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "形狀、形成",
+    "note": "transform, reform 與「形態改變」有關。",
+    "words": [
+      {"w": "transform", "zh": "轉變"},
+      {"w": "reform", "zh": "改革"},
+      {"w": "formal", "zh": "正式的"},
+      {"w": "uniform", "zh": "制服；一致的"}
+    ]
+  },
+  {
+    "id": "gen",
+    "root": "gen",
+    "variants": ["gn", "kin"],
+    "origin": "Latin/Greek",
+    "meaning": "出生、種類、產生",
+    "note": "generate, generous（出身高貴→慷慨）。",
+    "words": [
+      {"w": "generate", "zh": "產生"},
+      {"w": "generous", "zh": "慷慨的"},
+      {"w": "genius", "zh": "天才"},
+      {"w": "pregnant", "zh": "懷孕的"}
+    ]
+  },
+  {
+    "id": "geo",
+    "root": "geo",
+    "variants": [],
+    "origin": "Greek",
+    "meaning": "地、土地",
+    "note": "geography, geometry（測地）。",
+    "words": [
+      {"w": "geography", "zh": "地理"},
+      {"w": "geology", "zh": "地質學"},
+      {"w": "geometry", "zh": "幾何"}
+    ]
+  },
+  {
+    "id": "graph_gram",
+    "root": "graph / gram",
+    "variants": [],
+    "origin": "Greek",
+    "meaning": "寫、畫、記錄",
+    "note": "photograph, diagram。",
+    "words": [
+      {"w": "photograph", "zh": "照片"},
+      {"w": "diagram", "zh": "圖表"},
+      {"w": "grammar", "zh": "文法"},
+      {"w": "biography", "zh": "傳記"}
+    ]
+  },
+  {
+    "id": "ject",
+    "root": "ject",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "丟、投、拋",
+    "note": "reject, project。",
+    "words": [
+      {"w": "reject", "zh": "拒絕"},
+      {"w": "project", "zh": "計畫；投射"},
+      {"w": "inject", "zh": "注射"},
+      {"w": "subject", "zh": "主題；使遭受"}
+    ]
+  },
+  {
+    "id": "jud_jur",
+    "root": "jud / jur",
+    "variants": ["jus"],
+    "origin": "Latin",
+    "meaning": "法律、判斷、發誓",
+    "note": "judge, jury, justice。",
+    "words": [
+      {"w": "judge", "zh": "法官；判斷"},
+      {"w": "jury", "zh": "陪審團"},
+      {"w": "justice", "zh": "正義"},
+      {"w": "prejudice", "zh": "偏見"}
+    ]
+  },
+  {
+    "id": "log",
+    "root": "log",
+    "variants": ["logue", "ology"],
+    "origin": "Greek",
+    "meaning": "說、道理、學科",
+    "note": "biology 的 -logy 是「…學」。",
+    "words": [
+      {"w": "dialogue", "zh": "對話"},
+      {"w": "logic", "zh": "邏輯"},
+      {"w": "apology", "zh": "道歉（原為「辯解」）"},
+      {"w": "psychology", "zh": "心理學"}
+    ]
+  },
+  {
+    "id": "man_manu",
+    "root": "man / manu",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "手",
+    "note": "manual, manufacture。",
+    "words": [
+      {"w": "manual", "zh": "手冊；手動的"},
+      {"w": "manufacture", "zh": "製造"},
+      {"w": "manuscript", "zh": "手稿"},
+      {"w": "manipulate", "zh": "操縱"}
+    ]
+  },
+  {
+    "id": "mit_mis",
+    "root": "mit / mis",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "送、放出",
+    "note": "submit, mission, dismiss。",
+    "words": [
+      {"w": "submit", "zh": "提交；屈服"},
+      {"w": "mission", "zh": "任務"},
+      {"w": "dismiss", "zh": "解散；解雇"},
+      {"w": "transmit", "zh": "傳送"}
+    ]
+  },
+  {
+    "id": "path",
+    "root": "path",
+    "variants": ["pathy"],
+    "origin": "Greek",
+    "meaning": "感覺、受苦、疾病",
+    "note": "sympathy, pathetic。",
+    "words": [
+      {"w": "sympathy", "zh": "同情"},
+      {"w": "empathy", "zh": "同理心"},
+      {"w": "pathetic", "zh": "可憐的"},
+      {"w": "apathy", "zh": "冷漠"}
+    ]
+  },
+  {
+    "id": "ped_pod",
+    "root": "ped / pod",
+    "variants": [],
+    "origin": "Greek/Latin",
+    "meaning": "腳",
+    "note": "pedal, expedition（走出遠門）。",
+    "words": [
+      {"w": "pedal", "zh": "踏板"},
+      {"w": "expedition", "zh": "遠征"},
+      {"w": "biped", "zh": "雙足動物"}
+    ]
+  },
+  {
+    "id": "phil",
+    "root": "phil",
+    "variants": ["phile"],
+    "origin": "Greek",
+    "meaning": "愛",
+    "note": "philosophy 愛智慧。",
+    "words": [
+      {"w": "philosophy", "zh": "哲學"},
+      {"w": "bibliophile", "zh": "愛書人"},
+      {"w": "philanthropy", "zh": "慈善"}
+    ]
+  },
+  {
+    "id": "phon",
+    "root": "phon",
+    "variants": [],
+    "origin": "Greek",
+    "meaning": "聲音",
+    "note": "telephone, symphony。",
+    "words": [
+      {"w": "telephone", "zh": "電話"},
+      {"w": "symphony", "zh": "交響樂"},
+      {"w": "microphone", "zh": "麥克風"}
+    ]
+  },
+  {
+    "id": "port",
+    "root": "port",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "攜帶、運",
+    "note": "export, portable。",
+    "words": [
+      {"w": "export", "zh": "出口"},
+      {"w": "import", "zh": "進口"},
+      {"w": "portable", "zh": "可攜式的"},
+      {"w": "transport", "zh": "運輸"}
+    ]
+  },
+  {
+    "id": "pos_pon",
+    "root": "pos / pon",
+    "variants": ["pose", "pound"],
+    "origin": "Latin",
+    "meaning": "放置",
+    "note": "compose, position, opponent。",
+    "words": [
+      {"w": "compose", "zh": "組成；作曲"},
+      {"w": "position", "zh": "位置；立場"},
+      {"w": "opponent", "zh": "對手"},
+      {"w": "deposit", "zh": "存款；沉積"}
+    ]
+  },
+  {
+    "id": "scrib_script",
+    "root": "scrib / script",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "寫",
+    "note": "describe, prescription。",
+    "words": [
+      {"w": "describe", "zh": "描述"},
+      {"w": "subscribe", "zh": "訂閱"},
+      {"w": "manuscript", "zh": "手稿"},
+      {"w": "prescription", "zh": "處方"}
+    ]
+  },
+  {
+    "id": "sens_sent",
+    "root": "sens / sent",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "感覺、覺察、送",
+    "note": "consent 一起「送出」意見→同意。",
+    "words": [
+      {"w": "sense", "zh": "感覺；意義"},
+      {"w": "consent", "zh": "同意"},
+      {"w": "resent", "zh": "怨恨"},
+      {"w": "sensitive", "zh": "敏感的"}
+    ]
+  },
+  {
+    "id": "spec_spect",
+    "root": "spec / spect",
+    "variants": ["spic", "spy"],
+    "origin": "Latin",
+    "meaning": "看",
+    "note": "inspect, suspect, respect。",
+    "words": [
+      {"w": "inspect", "zh": "檢查"},
+      {"w": "suspect", "zh": "懷疑"},
+      {"w": "respect", "zh": "尊敬"},
+      {"w": "perspective", "zh": "觀點；透視"}
+    ]
+  },
+  {
+    "id": "struct_stru",
+    "root": "struct",
+    "variants": ["stru"],
+    "origin": "Latin",
+    "meaning": "建造、堆疊",
+    "note": "construct, destroy（拆結構）。",
+    "words": [
+      {"w": "construct", "zh": "建造"},
+      {"w": "structure", "zh": "結構"},
+      {"w": "destructive", "zh": "破壞性的"},
+      {"w": "instruct", "zh": "指導"}
+    ]
+  },
+  {
+    "id": "tele",
+    "root": "tele",
+    "variants": [],
+    "origin": "Greek",
+    "meaning": "遠",
+    "note": "television, telescope。",
+    "words": [
+      {"w": "television", "zh": "電視"},
+      {"w": "telephone", "zh": "電話"},
+      {"w": "telescope", "zh": "望遠鏡"}
+    ]
+  },
+  {
+    "id": "ten_tain",
+    "root": "ten / tain",
+    "variants": ["tin", "tent"],
+    "origin": "Latin",
+    "meaning": "握、保持",
+    "note": "contain, maintain, retain。",
+    "words": [
+      {"w": "contain", "zh": "包含"},
+      {"w": "maintain", "zh": "維持"},
+      {"w": "retain", "zh": "保留"},
+      {"w": "sustain", "zh": "支撐；維持"}
+    ]
+  },
+  {
+    "id": "tract",
+    "root": "tract",
+    "variants": ["tray", "treat"],
+    "origin": "Latin",
+    "meaning": "拉、拖",
+    "note": "attract, contract, subtract。",
+    "words": [
+      {"w": "attract", "zh": "吸引"},
+      {"w": "contract", "zh": "合約；收縮"},
+      {"w": "subtract", "zh": "減去"},
+      {"w": "distract", "zh": "使分心"}
+    ]
+  },
+  {
+    "id": "vac_van",
+    "root": "vac / van",
+    "variants": ["void"],
+    "origin": "Latin",
+    "meaning": "空",
+    "note": "vacuum, vanish。",
+    "words": [
+      {"w": "vacuum", "zh": "真空；吸塵"},
+      {"w": "evacuate", "zh": "撤離"},
+      {"w": "vanish", "zh": "消失"},
+      {"w": "void", "zh": "空虛；無效"}
+    ]
+  },
+  {
+    "id": "ven_vent",
+    "root": "ven / vent",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "來",
+    "note": "convene, adventure, prevent。",
+    "words": [
+      {"w": "convene", "zh": "召集"},
+      {"w": "intervene", "zh": "介入"},
+      {"w": "adventure", "zh": "冒險"},
+      {"w": "prevent", "zh": "預防"}
+    ]
+  },
+  {
+    "id": "ver",
+    "root": "ver",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "真實",
+    "note": "verify, verdict。",
+    "words": [
+      {"w": "verify", "zh": "證實"},
+      {"w": "verdict", "zh": "裁決"},
+      {"w": "veracity", "zh": "真實性"}
+    ]
+  },
+  {
+    "id": "vid_vis",
+    "root": "vid / vis",
+    "variants": [],
+    "origin": "Latin",
+    "meaning": "看",
+    "note": "video, vision, evidence。",
+    "words": [
+      {"w": "video", "zh": "影片"},
+      {"w": "evidence", "zh": "證據"},
+      {"w": "visible", "zh": "可見的"},
+      {"w": "revise", "zh": "修訂"}
+    ]
+  },
+  {
+    "id": "voc_vok",
+    "root": "voc / vok",
+    "variants": ["voice", "vow"],
+    "origin": "Latin",
+    "meaning": "聲音、呼喊",
+    "note": "vocabulary, advocate, evoke。",
+    "words": [
+      {"w": "vocabulary", "zh": "字彙"},
+      {"w": "advocate", "zh": "倡導；辯護人"},
+      {"w": "evoke", "zh": "喚起"},
+      {"w": "provoke", "zh": "激怒；激起"}
+    ]
+  }
+]

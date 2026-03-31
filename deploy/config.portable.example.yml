@@ -1,0 +1,16 @@
+# 複製為專案根目錄的 config.yml（已 .gitignore）
+# 在 repo 根目錄執行：cloudflared tunnel --config config.yml run
+#
+# 1. mkdir -p .cloudflared && 將 Cloudflare 下載的 <UUID>.json 放入
+# 2. 將下方 tunnel、credentials-file 改成你的 UUID 與檔名
+
+tunnel: <YOUR_TUNNEL_UUID>
+credentials-file: .cloudflared/<YOUR_TUNNEL_UUID>.json
+
+ingress:
+  # 單埠模式：與 python serve_portable.py 相同埠（預設 8000）
+  - hostname: etymon-decoder.com
+    service: http://127.0.0.1:8000
+  - hostname: www.etymon-decoder.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404

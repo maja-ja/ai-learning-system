@@ -1,0 +1,8 @@
+# Minimal Supabase CLI config. Replace project_id when linking.
+project_id = "kadusella"
+
+[api]
+enabled = true
+
+[functions]
+verify_jwt = false

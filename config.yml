@@ -2,12 +2,10 @@ tunnel: a8834b81-c604-49c0-8ca8-d2629445f112
 credentials-file: /Users/chenpinrong/.cloudflared/a8834b81-c604-49c0-8ca8-d2629445f112.json
 
 ingress:
-  # 展示端：Streamlit
+  # 單埠：serve_portable.py（SPA + /api 同源，見 docs/deploy/PORTABLE-ANY-MACHINE.md）
   - hostname: etymon-decoder.com
-    service: http://localhost:8501
-  
-  # 後端：FastAPI
+    service: http://127.0.0.1:8000
   - hostname: api.etymon-decoder.com
-    service: http://localhost:8000
+    service: http://127.0.0.1:8000
 
   - service: http_status:404

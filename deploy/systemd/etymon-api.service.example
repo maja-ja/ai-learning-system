@@ -1,0 +1,22 @@
+# 複製到 /etc/systemd/system/etymon-api.service 後修改路徑與使用者
+# sudo systemctl daemon-reload && sudo systemctl enable --now etymon-api.service
+
+[Unit]
+Description=Etymon Decoder FastAPI (uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+# 建議改為專用使用者，並確保對 WorkingDirectory 有讀取權
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/etymon-decoder/ai-learning-system
+EnvironmentFile=-/etc/etymon/api.env
+ExecStart=/var/www/etymon-decoder/ai-learning-system/.venv/bin/uvicorn backend.api:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips='*'
+Restart=on-failure
+RestartSec=5
+
+# 僅在 Nginx / 受信任反代後方使用 forwarded-allow-ips='*'
+
+[Install]
+WantedBy=multi-user.target

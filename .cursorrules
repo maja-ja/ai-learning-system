@@ -1,0 +1,16 @@
+# 專案結構規則
+- 前端程式碼放 web/src/（Vite）；Next.js + Supabase 控制台放 kadusella/
+- 後端 API 放 backend/
+- 文件說明放 docs/
+- 部署設定範本放 deploy/
+- 知識內容放 知識/（獨立管理，不與程式碼混用）
+- 專案素材（logo、qrcode 等）放 assets/
+
+# 安全規則
+- config.yml、kadusella/config.yml、secrets.toml 是本機機密，不要 commit
+- 只有 *.example 版本可以放進 git
+
+# 命名規則
+- Python 檔案用 snake_case
+- React 元件用 PascalCase
+- 資料夾用小寫加底線
