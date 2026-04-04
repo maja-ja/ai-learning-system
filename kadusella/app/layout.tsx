@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kadusella — AI 教育解碼基座",
+  title: "Kadusella — Etymon Decoder",
   description:
     "多租戶、向量檢索與解碼追蹤 — Next.js · Supabase pgvector · Clerk",
 };

@@ -14,4 +14,4 @@
 
 ---
 
-*本講義由 AI 教育工作站生成*
+*本講義由 Etymon Decoder（etymon-decoder.com）生成*

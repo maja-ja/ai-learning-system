@@ -1,4 +1,12 @@
-import type { ExamSearchHit, ExamSubject, KnowledgeRow, RootEntry } from "../types";
+import type {
+  ContributionMode,
+  ExamSearchHit,
+  ExamSubject,
+  KnowledgeRow,
+  RootEntry,
+} from "../types";
+import { clearMemberToken, getMemberToken, readMemberTokenClaims } from "./memberToken";
+import { getUserGeminiKey } from "./userKeys";
 
 const _base = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/$/, "");
 
@@ -11,6 +19,20 @@ function apiUrl(path: string): string {
 }
 
 const jsonHeaders = { "Content-Type": "application/json" };
+
+function memberHeaders(): HeadersInit {
+  const token = getMemberToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+function aiHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const gk = getUserGeminiKey();
+  if (gk) headers["X-User-Gemini-Key"] = gk;
+  return headers;
+}
 
 export type KnowledgeFetchResult = {
   rows: KnowledgeRow[];
@@ -32,16 +54,26 @@ export type DecodeResult = {
   data: KnowledgeRow;
   saved_to?: string;
   ai_provider?: string;
+  contribution_mode?: ContributionMode;
 };
 
-export async function decodeNote(text: string): Promise<DecodeResult> {
+export async function decodeNote(
+  text: string,
+  contributionMode: ContributionMode
+): Promise<DecodeResult> {
   const r = await fetch(apiUrl("/decode"), {
     method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify({ text }),
+    headers: { ...jsonHeaders, ...memberHeaders(), ...aiHeaders() },
+    body: JSON.stringify({
+      text,
+      contribution_mode: contributionMode,
+    }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      clearMemberToken();
+    }
     const d = (j as { detail?: string }).detail;
     throw new Error(typeof d === "string" ? d : "解碼失敗");
   }
@@ -203,20 +235,25 @@ export async function batchDecode(body: {
   aux_categories?: string[];
   force_refresh?: boolean;
   delay_sec?: number;
+  contribution_mode: ContributionMode;
 }): Promise<BatchDecodeResponse> {
   const r = await fetch(apiUrl("/api/decode/batch"), {
     method: "POST",
-    headers: jsonHeaders,
+    headers: { ...jsonHeaders, ...memberHeaders(), ...aiHeaders() },
     body: JSON.stringify({
       words: body.words,
       primary_category: body.primary_category,
       aux_categories: body.aux_categories ?? [],
       force_refresh: body.force_refresh ?? false,
       delay_sec: body.delay_sec ?? 0.5,
+      contribution_mode: body.contribution_mode,
     }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      clearMemberToken();
+    }
     const d = (j as { detail?: string }).detail;
     throw new Error(typeof d === "string" ? d : "批量解碼失敗");
   }
@@ -230,7 +267,7 @@ export async function suggestTopics(
 ): Promise<string[]> {
   const r = await fetch(apiUrl("/api/decode/suggest-topics"), {
     method: "POST",
-    headers: jsonHeaders,
+    headers: { ...jsonHeaders, ...memberHeaders(), ...aiHeaders() },
     body: JSON.stringify({
       primary_category,
       aux_categories,
@@ -239,6 +276,9 @@ export async function suggestTopics(
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      clearMemberToken();
+    }
     const d = (j as { detail?: string }).detail;
     throw new Error(typeof d === "string" ? d : "建議主題失敗");
   }
@@ -246,25 +286,73 @@ export async function suggestTopics(
 }
 
 export async function generateHandoutMarkdown(
+  title: string,
   manual_input: string,
   instruction: string,
+  contribution_mode: ContributionMode,
   image_base64?: string | null
 ): Promise<string> {
   const r = await fetch(apiUrl("/api/handout/generate"), {
     method: "POST",
-    headers: jsonHeaders,
+    headers: { ...jsonHeaders, ...memberHeaders(), ...aiHeaders() },
     body: JSON.stringify({
+      title,
       manual_input,
       instruction,
+      contribution_mode,
       image_base64: image_base64 || undefined,
     }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      clearMemberToken();
+    }
     const d = (j as { detail?: string }).detail;
     throw new Error(typeof d === "string" ? d : "講義生成失敗");
   }
   return (j as { markdown?: string }).markdown ?? "";
+}
+
+export type MemberStorageRecord = {
+  id: string;
+  feature: string;
+  title: string;
+  contribution_mode: ContributionMode;
+  input_text?: string;
+  output_text?: string;
+  output_json?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+};
+
+export async function fetchMemberStorage(feature?: string): Promise<MemberStorageRecord[]> {
+  const q = feature ? `?feature=${encodeURIComponent(feature)}` : "";
+  const r = await fetch(apiUrl(`/api/member/storage${q}`), {
+    headers: memberHeaders(),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      clearMemberToken();
+    }
+    const d = (j as { detail?: string }).detail;
+    throw new Error(typeof d === "string" ? d : "載入個人存儲失敗");
+  }
+  return (j as { data?: MemberStorageRecord[] }).data ?? [];
+}
+
+export async function deleteMemberStorage(recordId: string): Promise<void> {
+  const r = await fetch(apiUrl("/api/member/storage"), {
+    method: "DELETE",
+    headers: { ...jsonHeaders, ...memberHeaders(), ...aiHeaders() },
+    body: JSON.stringify({ record_id: recordId }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const d = (j as { detail?: string }).detail;
+    throw new Error(typeof d === "string" ? d : "刪除個人存儲失敗");
+  }
 }
 
 export async function fetchHandoutPreviewHtml(
@@ -305,63 +393,6 @@ export async function searchExamLocal(
   return j.results ?? [];
 }
 
-export type LearnerContextBody = {
-  tenant_id: string;
-  profile_id: string;
-  age_band: "under_13" | "13_15" | "16_18" | "19_22" | "23_plus";
-  region_code: string;
-  preferred_language?: string;
-  metadata?: Record<string, unknown>;
-};
-
-export type AhaHookRecommendItem = {
-  id: string;
-  hook_type: string;
-  hook_variant_id: string;
-  hook_text: string;
-  score?: number;
-  metrics?: {
-    aha_rate?: number;
-    lift?: number;
-    time_to_aha_ms?: number | null;
-  };
-};
-
-export async function upsertLearnerContext(body: LearnerContextBody) {
-  const r = await fetch(apiUrl("/api/learner/context"), {
-    method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify(body),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const d = (j as { detail?: string }).detail;
-    throw new Error(typeof d === "string" ? d : "儲存學習者背景失敗");
-  }
-  return (j as { data?: Record<string, unknown> }).data ?? {};
-}
-
-export async function recommendAhaHooks(params: {
-  tenant_id: string;
-  profile_id: string;
-  topic_key: string;
-  limit?: number;
-}): Promise<AhaHookRecommendItem[]> {
-  const q = new URLSearchParams({
-    tenant_id: params.tenant_id,
-    profile_id: params.profile_id,
-    topic_key: params.topic_key,
-    limit: String(params.limit ?? 5),
-  });
-  const r = await fetch(apiUrl(`/api/aha/hooks/recommend?${q}`));
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const d = (j as { detail?: string }).detail;
-    throw new Error(typeof d === "string" ? d : "取得 Aha 推薦失敗");
-  }
-  return (j as { data?: AhaHookRecommendItem[] }).data ?? [];
-}
-
 // --------------------------------------------------------------------------
 // Click tracking
 // --------------------------------------------------------------------------
@@ -378,10 +409,16 @@ export async function sendClickEvents(
   events: ClickEventPayload[]
 ): Promise<void> {
   if (!events.length) return;
+  const claims = readMemberTokenClaims();
   await fetch(apiUrl("/api/tracking/clicks"), {
     method: "POST",
     headers: jsonHeaders,
-    body: JSON.stringify({ session_id, events }),
+    body: JSON.stringify({
+      session_id,
+      tenant_id: claims?.tenantId,
+      profile_id: claims?.profileId,
+      events,
+    }),
   }).catch(() => {});
 }
 
@@ -403,38 +440,3 @@ export async function fetchClickPrediction(
   return (j as { predictions?: ClickPrediction[] }).predictions ?? [];
 }
 
-// --------------------------------------------------------------------------
-// Aha events
-// --------------------------------------------------------------------------
-
-export async function ingestAhaEvent(body: {
-  tenant_id: string;
-  profile_id: string;
-  event_type:
-    | "confused"
-    | "hint_shown"
-    | "aha_reported"
-    | "question_answered"
-    | "question_corrected"
-    | "review_passed";
-  topic_key: string;
-  hook_id?: string;
-  hook_variant_id?: string;
-  question_id?: string;
-  is_correct?: boolean;
-  latency_ms?: number;
-  self_report_delta?: number;
-  metadata?: Record<string, unknown>;
-}) {
-  const r = await fetch(apiUrl("/api/aha/events"), {
-    method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify(body),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const d = (j as { detail?: string }).detail;
-    throw new Error(typeof d === "string" ? d : "寫入 Aha 事件失敗");
-  }
-  return (j as { data?: Record<string, unknown> }).data ?? {};
-}

@@ -4,5 +4,17 @@ project_id = "kadusella"
 [api]
 enabled = true
 
-[functions]
+[functions.decode]
+verify_jwt = false
+
+[functions.handout-generate]
+verify_jwt = false
+
+[functions.random-topics]
+verify_jwt = false
+
+[functions.rag-search]
+verify_jwt = false
+
+[functions.embed-entry]
 verify_jwt = false

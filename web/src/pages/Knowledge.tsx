@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Download, FileText, RefreshCw, Search, Sparkles, Volume2, X,
 } from "lucide-react";
@@ -26,9 +27,13 @@ function pickRandom<T>(arr: T[], n: number): T[] {
 }
 
 export default function Knowledge() {
-  const [rows, setRows]           = useState<KnowledgeRow[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [err, setErr]             = useState<string | null>(null);
+  const { data, isLoading: loading, error } = useQuery({
+    queryKey: ["knowledge"],
+    queryFn: fetchKnowledge,
+  });
+  const rows = data?.rows ?? [];
+  const err = error ? (error instanceof Error ? error.message : "載入失敗") : null;
+
   const [q, setQ]                 = useState("");
   const [cat, setCat]             = useState<string>("全部");
   const [sel, setSel]             = useState<KnowledgeRow | null>(null);
@@ -45,16 +50,6 @@ export default function Knowledge() {
       URL.revokeObjectURL(url);
     } catch { alert("匯出失敗"); } finally { setExporting(false); }
   };
-
-  useEffect(() => {
-    let ok = true;
-    setLoading(true);
-    fetchKnowledge()
-      .then((d) => { if (ok) setRows(d.rows); })
-      .catch((e: Error) => { if (ok) setErr(e.message); })
-      .finally(() => { if (ok) setLoading(false); });
-    return () => { ok = false; };
-  }, []);
 
   const categories = useMemo(() => {
     const s = new Set<string>();
@@ -94,8 +89,16 @@ export default function Knowledge() {
           className="inline-flex items-center gap-2 shrink-0 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-ink-100 hover:bg-white/10 disabled:opacity-50"
         >
           <Download className="h-4 w-4" />
-          {exporting ? "打包中…" : "匯出 Markdown ZIP"}
+          {exporting ? "打包中…" : "匯出 ZIP"}
         </button>
+        <a
+          href={`${(import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/$/, "") || ""}/api/knowledge/export-anki`}
+          download="etymon_anki.tsv"
+          className="inline-flex items-center gap-2 shrink-0 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-ink-100 hover:bg-white/10"
+        >
+          <Download className="h-4 w-4" />
+          Anki TSV
+        </a>
       </div>
 
       {err && (

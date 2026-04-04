@@ -13,6 +13,7 @@ from google.genai import types
 
 from .schemas import KnowledgeCard
 from .model_router import resolve_provider, resolve_gemini_model, resolve_claude_model
+from .prompts_prod import KNOWLEDGE_CARD_FROM_NOTE, knowledge_card_user_message
 
 CARD_KEYS = list(KnowledgeCard.model_fields.keys())
 
@@ -38,11 +39,14 @@ def _extract_json_from_text(text: str) -> Dict[str, Any]:
     return json.loads(t)
 
 
-def _decode_gemini(note_text: str, tier: str = "quality") -> Dict[str, str]:
-    if not GEMINI_API_KEY:
-        raise ValueError("未設定 GEMINI_API_KEY，無法使用 Gemini")
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    prompt = f"將此筆記轉化為深度知識卡：\n{note_text}"
+def _decode_gemini(note_text: str, tier: str = "quality", user_key: str = "") -> Dict[str, str]:
+    key = user_key.strip() or GEMINI_API_KEY
+    if not key:
+        raise ValueError("請在頁面上方設定您的 Gemini API Key")
+    client = genai.Client(api_key=key)
+    prompt = (
+        f"{KNOWLEDGE_CARD_FROM_NOTE}\n\n{knowledge_card_user_message(note_text.strip())}"
+    )
     response = client.models.generate_content(
         model=resolve_gemini_model(tier=tier),  # explanation tasks use quality tier by default
         contents=prompt,
@@ -68,14 +72,12 @@ def _decode_claude(note_text: str, tier: str = "quality") -> Dict[str, str]:
         f'  "{k}": string,  // {KnowledgeCard.model_fields[k].description}'
         for k in CARD_KEYS
     )
-    user_prompt = f"""將以下筆記轉成一張「深度知識卡」，只輸出**一個** JSON 物件，不要其他說明、不要 markdown 包圍。
-欄位與語意如下（全部必填，可為空字串）：
+    user_prompt = f"""{KNOWLEDGE_CARD_FROM_NOTE}
+
+欄位鍵名與語意（全部鍵須出現；值可為空字串）：
 {schema_hint}
 
-使用者筆記：
----
-{note_text}
----
+{knowledge_card_user_message(note_text.strip())}
 """
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -102,11 +104,10 @@ def resolve_ai_provider(tier: str = "quality") -> str:
     return resolve_provider(tier=tier)
 
 
-def decode_to_knowledge_card(note_text: str) -> Tuple[Dict[str, str], str]:
-    """
-    回傳 (知識卡 dict, 使用的供應商代碼 'gemini' | 'claude')
-    """
+def decode_to_knowledge_card(
+    note_text: str, user_gemini_key: str = "",
+) -> Tuple[Dict[str, str], str]:
     provider = resolve_ai_provider(tier="quality")
     if provider == "claude":
         return _decode_claude(note_text, tier="quality"), "claude"
-    return _decode_gemini(note_text, tier="quality"), "gemini"
+    return _decode_gemini(note_text, tier="quality", user_key=user_gemini_key), "gemini"

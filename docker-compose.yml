@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - SERVE_WEB_DIST=1
+      - ALLOW_DEV_DEFAULTS=0
+    volumes:
+      - ./backend/local.db:/app/backend/local.db
+      - ./知識:/app/知識:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

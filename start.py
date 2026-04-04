@@ -121,7 +121,7 @@ def _run_knowledge_from_cmd(root_dir: str, cmd) -> None:
 
 
 def main() -> None:
-    print("🚀 AI 教育工作站 — 一鍵啟動\n")
+    print("🚀 Etymon Decoder — 一鍵啟動\n")
 
     root_dir = os.path.abspath(os.path.dirname(__file__))
     kcmd = _resolve_start_knowledge_cmd(sys.argv)

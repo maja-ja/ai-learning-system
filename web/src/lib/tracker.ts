@@ -113,7 +113,6 @@ export interface ClickEvent {
 
 let _queue: ClickEvent[] = [];
 let _seq = 0;
-let _flushTimer: ReturnType<typeof setInterval> | null = null;
 let _initialized = false;
 
 function currentPage(): string {
@@ -153,7 +152,7 @@ export function initTracker() {
 
   document.addEventListener("click", handleClick, { capture: true, passive: true });
 
-  _flushTimer = setInterval(() => {
+  setInterval(() => {
     sessionStorage.setItem("_tracker_seq", String(_seq));
     flush();
   }, 6000);

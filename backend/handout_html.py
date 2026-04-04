@@ -93,7 +93,7 @@ def build_printable_html(
     <div id="printable-area">
         <h1>{title_esc}</h1>
         <div style="text-align:right; font-size:13px; color:#9CA3AF; margin-bottom: 30px;">
-            發佈日期：{date_str} | AI 教育工作站
+            發佈日期：{date_str} | Etymon Decoder · etymon-decoder.com
         </div>
         {img_section}
         <div class="content">{html_body}</div>

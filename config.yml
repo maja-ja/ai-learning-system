@@ -1,5 +1,5 @@
-tunnel: a8834b81-c604-49c0-8ca8-d2629445f112
-credentials-file: /Users/chenpinrong/.cloudflared/a8834b81-c604-49c0-8ca8-d2629445f112.json
+tunnel: 447dc575-6fda-473a-a60e-aa6d9bbbbeee
+credentials-file: /Users/cpr/.cloudflared/447dc575-6fda-473a-a60e-aa6d9bbbbeee.json
 
 ingress:
   # 單埠：serve_portable.py（SPA + /api 同源，見 docs/deploy/PORTABLE-ANY-MACHINE.md）

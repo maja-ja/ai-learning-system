@@ -1,80 +1,44 @@
-import { useState } from "react";
-import { FlaskConical, Loader2, Sparkles } from "lucide-react";
-import {
-  batchDecode,
-  suggestTopics,
-  upsertLearnerContext,
-  recommendAhaHooks,
-  ingestAhaEvent,
-  type AhaHookRecommendItem,
-} from "../lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BarChart3, FlaskConical, Loader2, Map, Save, Sparkles, StopCircle, Upload } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { suggestTopics, API_BASE, fetchMemberStorage } from "../lib/api";
+import type { ContributionMode } from "../types";
+import GenerationPaywall from "../components/GenerationPaywall";
+import { useMembership } from "../membership";
+import { getMemberToken } from "../lib/memberToken";
+import { getUserGeminiKey } from "../lib/userKeys";
+import KnowledgeMapView from "../components/KnowledgeMapView";
+import CategoryPicker, { ALL_CATEGORIES } from "../components/CategoryPicker";
+import BatchProgress, { type BatchItem } from "../components/BatchProgress";
 
-const CATEGORIES: Record<string, string[]> = {
-  "語言與邏輯": ["英語辭源", "語言邏輯", "符號學", "修辭學"],
-  "科學與技術": [
-    "物理科學",
-    "生物醫學",
-    "神經科學",
-    "量子力學",
-    "人工智慧",
-    "數學邏輯",
-  ],
-  "人文與社會": [
-    "歷史文明",
-    "政治法律",
-    "社會心理",
-    "哲學宗教",
-    "軍事戰略",
-    "古希臘神話",
-    "考古發現",
-  ],
-  "商業與職場": [
-    "商業商戰",
-    "金融投資",
-    "產品設計",
-    "數位行銷",
-    "職場政治",
-    "管理學",
-    "賽局理論",
-  ],
-  "生活與藝術": [
-    "餐飲文化",
-    "社交禮儀",
-    "藝術美學",
-    "影視文學",
-    "運動健身",
-    "流行文化",
-    "心理療癒",
-  ],
-};
+type LabTab = "batch" | "map" | "stats";
 
-const FLAT = Object.values(CATEGORIES).flat();
-const AGE_BANDS = ["13_15", "16_18", "19_22", "23_plus"] as const;
-const REGIONS = ["TW-TPE", "TW-NWT", "TW-TXG", "TW-KHH", "HK", "SG"];
+const QUEUE_KEY = "etymon_topic_queue";
 
 export default function Lab() {
-  const [primary, setPrimary] = useState(FLAT[0] ?? "英語辭源");
+  const membership = useMembership();
+  const [tab, setTab] = useState<LabTab>("batch");
+  const [primary, setPrimary] = useState(ALL_CATEGORIES[0] ?? "英語辭源");
   const [aux, setAux] = useState<string[]>([]);
-  const [lines, setLines] = useState("");
+  const [lines, setLines] = useState(() => {
+    try { return localStorage.getItem(QUEUE_KEY) || ""; } catch { return ""; }
+  });
   const [force, setForce] = useState(false);
+
+  // Persist topic queue to localStorage
+  useEffect(() => {
+    try { localStorage.setItem(QUEUE_KEY, lines); } catch { /* noop */ }
+  }, [lines]);
   const [delay, setDelay] = useState(0.8);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string | null>(null);
-  const [result, setResult] = useState<{
-    saved: { word: string; saved_to: string }[];
-    skipped: string[];
-    errors: { word: string; detail: string }[];
-  } | null>(null);
-  const [tenantId, setTenantId] = useState("demo-tenant");
-  const [profileId, setProfileId] = useState("demo-profile");
-  const [ageBand, setAgeBand] = useState<(typeof AGE_BANDS)[number]>("16_18");
-  const [regionCode, setRegionCode] = useState("TW-TPE");
-  const [topicKey, setTopicKey] = useState("functions_equations");
-  const [hooks, setHooks] = useState<AhaHookRecommendItem[]>([]);
-  const [selectedHook, setSelectedHook] = useState<AhaHookRecommendItem | null>(null);
-  const [hintShownAt, setHintShownAt] = useState<number | null>(null);
+  const [contributionMode, setContributionMode] = useState<ContributionMode>("private_use");
 
-  const displayCat = primary + (aux.length ? ` + ${aux.join(" + ")}` : "");
+  // SSE streaming state
+  const [streaming, setStreaming] = useState(false);
+  const [streamItems, setStreamItems] = useState<BatchItem[]>([]);
+  const [streamComplete, setStreamComplete] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const onSuggest = async () => {
     setLog(null);
@@ -89,7 +53,7 @@ export default function Lab() {
     }
   };
 
-  const onBatch = async () => {
+  const onStreamBatch = useCallback(async () => {
     const words = lines
       .split(/[\n,，]/)
       .map((s) => s.trim())
@@ -100,453 +64,425 @@ export default function Lab() {
       return;
     }
     setLog(null);
-    setResult(null);
+    setStreamItems([]);
+    setStreamComplete(false);
+    setStreaming(true);
     setBusy(true);
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
     try {
-      const r = await batchDecode({
-        words,
-        primary_category: primary,
-        aux_categories: aux,
-        force_refresh: force,
-        delay_sec: delay,
+      const token = getMemberToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const gk = getUserGeminiKey();
+      if (gk) headers["X-User-Gemini-Key"] = gk;
+
+      const url = API_BASE ? `${API_BASE}/api/decode/batch-stream` : "/api/decode/batch-stream";
+      const resp = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          words,
+          primary_category: primary,
+          aux_categories: aux,
+          force_refresh: force,
+          delay_sec: delay,
+          contribution_mode: contributionMode,
+        }),
+        signal: ctrl.signal,
       });
-      setResult(r);
-      setLog(
-        `完成：寫入 ${r.saved.length}、跳過 ${r.skipped.length}、錯誤 ${r.errors.length}`
-      );
+
+      if (!resp.ok) {
+        const j = await resp.json().catch(() => ({}));
+        throw new Error((j as { detail?: string }).detail || `HTTP ${resp.status}`);
+      }
+
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error("No readable stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const stripped = line.replace(/^data:\s*/, "").trim();
+          if (!stripped) continue;
+          try {
+            const data = JSON.parse(stripped);
+            if (data.status === "complete") {
+              setStreamComplete(true);
+            } else {
+              setStreamItems((prev) => {
+                const idx = prev.findIndex((p) => p.i === data.i);
+                if (idx >= 0) {
+                  const next = [...prev];
+                  next[idx] = data as BatchItem;
+                  return next;
+                }
+                return [...prev, data as BatchItem];
+              });
+            }
+          } catch {
+            /* skip malformed */
+          }
+        }
+      }
+      setStreamComplete(true);
     } catch (e) {
-      setLog(e instanceof Error ? e.message : "批量解碼失敗");
+      if ((e as Error).name !== "AbortError") {
+        setLog(e instanceof Error ? e.message : "串流解碼失敗");
+      }
     } finally {
+      setStreaming(false);
       setBusy(false);
+      abortRef.current = null;
     }
+  }, [lines, primary, aux, force, delay, contributionMode]);
+
+  const onCancel = () => {
+    abortRef.current?.abort();
+    setStreaming(false);
+    setBusy(false);
+    setStreamComplete(true);
+    setLog("已中途取消。");
   };
 
-  const onSaveContext = async () => {
-    setLog(null);
-    setBusy(true);
-    try {
-      await upsertLearnerContext({
-        tenant_id: tenantId.trim(),
-        profile_id: profileId.trim(),
-        age_band: ageBand,
-        region_code: regionCode.trim(),
-        preferred_language: "zh-TW",
-        metadata: { source: "web_lab" },
-      });
-      setLog("已儲存 learner context。");
-    } catch (e) {
-      setLog(e instanceof Error ? e.message : "儲存 context 失敗");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const streamTotal = streamItems.length > 0 ? streamItems[0]?.total ?? 0 : 0;
 
-  const onRecommend = async () => {
-    setLog(null);
-    setBusy(true);
-    try {
-      const list = await recommendAhaHooks({
-        tenant_id: tenantId.trim(),
-        profile_id: profileId.trim(),
-        topic_key: topicKey.trim(),
-        limit: 5,
-      });
-      setHooks(list);
-      setSelectedHook(list[0] ?? null);
-      setHintShownAt(null);
-      setLog(`已取得 ${list.length} 則 Aha hook 推薦。`);
-    } catch (e) {
-      setLog(e instanceof Error ? e.message : "取得推薦失敗");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onMarkHintShown = async () => {
-    if (!selectedHook) {
-      setLog("請先選擇一則 hook。");
-      return;
-    }
-    setBusy(true);
-    try {
-      await ingestAhaEvent({
-        tenant_id: tenantId.trim(),
-        profile_id: profileId.trim(),
-        event_type: "hint_shown",
-        topic_key: topicKey.trim(),
-        hook_id: selectedHook.id,
-        hook_variant_id: selectedHook.hook_variant_id,
-        metadata: { surface: "lab", source: "manual_mvp_loop" },
-      });
-      setHintShownAt(Date.now());
-      setLog("已記錄 hint_shown。");
-    } catch (e) {
-      setLog(e instanceof Error ? e.message : "寫入事件失敗");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onMarkAha = async () => {
-    if (!selectedHook) {
-      setLog("請先選擇一則 hook。");
-      return;
-    }
-    setBusy(true);
-    try {
-      const latency = hintShownAt ? Math.max(Date.now() - hintShownAt, 0) : undefined;
-      await ingestAhaEvent({
-        tenant_id: tenantId.trim(),
-        profile_id: profileId.trim(),
-        event_type: "aha_reported",
-        topic_key: topicKey.trim(),
-        hook_id: selectedHook.id,
-        hook_variant_id: selectedHook.hook_variant_id,
-        latency_ms: latency,
-        self_report_delta: 3,
-        metadata: { surface: "lab", source: "manual_mvp_loop" },
-      });
-      setLog("已記錄 aha_reported。");
-    } catch (e) {
-      setLog(e instanceof Error ? e.message : "寫入事件失敗");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onMarkAnswer = async (isCorrect: boolean) => {
-    if (!selectedHook) {
-      setLog("請先選擇一則 hook。");
-      return;
-    }
-    setBusy(true);
-    try {
-      await ingestAhaEvent({
-        tenant_id: tenantId.trim(),
-        profile_id: profileId.trim(),
-        event_type: "question_answered",
-        topic_key: topicKey.trim(),
-        hook_id: selectedHook.id,
-        hook_variant_id: selectedHook.hook_variant_id,
-        question_id: `lab-${topicKey.trim()}-${Date.now()}`,
-        is_correct: isCorrect,
-        metadata: { surface: "lab", source: "manual_mvp_loop" },
-      });
-      setLog(`已記錄 question_answered（${isCorrect ? "答對" : "答錯"}）。`);
-    } catch (e) {
-      setLog(e instanceof Error ? e.message : "寫入事件失敗");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const btnBase = "inline-flex items-center gap-2 border border-black px-3 py-2 text-xs font-medium disabled:opacity-40";
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-          <FlaskConical className="h-8 w-8 text-accent-glow" />
+        <h1 className="text-2xl font-bold flex items-center gap-3">
+          <FlaskConical className="h-7 w-7 shrink-0" />
           解碼實驗室
         </h1>
-        <p className="mt-1 text-ink-400 text-sm">
-          對應原 Streamlit「跨領域批量解碼」。批量流程使用{" "}
-          <strong className="text-ink-300">Gemini</strong>（
-          <code className="text-ink-500">GEMINI_API_KEY</code>
-          ）；結果寫入 Supabase 與本機 SQLite。
+        <p className="mt-1 text-sm text-gray-500">
+          批量流程使用 Gemini；結果即時串流回傳，可中途取消。
         </p>
       </div>
 
-      <div className="glass-panel p-5 space-y-4">
-        <div className="rounded-xl border border-white/10 bg-ink-900/30 p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-ink-200">Aha MVP 打點閉環（今日啟用）</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <input
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
-              placeholder="tenant_id"
-              className="rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white"
+      {/* Tab switcher */}
+      <div className="flex border-b-2 border-black/10">
+        <button
+          type="button"
+          onClick={() => setTab("batch")}
+          className={[
+            "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors",
+            tab === "batch"
+              ? "border-black text-black"
+              : "border-transparent text-black/40 hover:text-black",
+          ].join(" ")}
+        >
+          <Sparkles className="h-4 w-4" />
+          批量解碼
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("map")}
+          className={[
+            "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors",
+            tab === "map"
+              ? "border-black text-black"
+              : "border-transparent text-black/40 hover:text-black",
+          ].join(" ")}
+        >
+          <Map className="h-4 w-4" />
+          知識地圖
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("stats")}
+          className={[
+            "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors",
+            tab === "stats"
+              ? "border-black text-black"
+              : "border-transparent text-black/40 hover:text-black",
+          ].join(" ")}
+        >
+          <BarChart3 className="h-4 w-4" />
+          歷史統計
+        </button>
+      </div>
+
+      {tab === "map" && <KnowledgeMapView />}
+
+      {tab === "stats" && <LabStats />}
+
+      {tab === "batch" && (
+        <>
+          {!membership.canGenerate && <GenerationPaywall title="實驗室生成已鎖定" />}
+
+          <div className="border border-black p-5 space-y-5">
+            {/* Category picker */}
+            <CategoryPicker
+              primary={primary}
+              aux={aux}
+              onPrimaryChange={setPrimary}
+              onAuxChange={setAux}
             />
-            <input
-              value={profileId}
-              onChange={(e) => setProfileId(e.target.value)}
-              placeholder="profile_id"
-              className="rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white"
-            />
-            <input
-              value={topicKey}
-              onChange={(e) => setTopicKey(e.target.value)}
-              placeholder="topic_key"
-              className="rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white"
-            />
-            <select
-              value={ageBand}
-              onChange={(e) => setAgeBand(e.target.value as (typeof AGE_BANDS)[number])}
-              className="rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white"
-            >
-              {AGE_BANDS.map((x) => (
-                <option key={x} value={x}>
-                  {x}
-                </option>
-              ))}
-            </select>
-            <select
-              value={regionCode}
-              onChange={(e) => setRegionCode(e.target.value)}
-              className="rounded-lg border border-white/10 bg-ink-900 px-3 py-2 text-sm text-white"
-            >
-              {REGIONS.map((x) => (
-                <option key={x} value={x}>
-                  {x}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              {
-                step: 1,
-                label: "儲存 learner context",
-                onClick: onSaveContext,
-                disabled: busy,
-                cls: "border-white/15 text-ink-200 hover:bg-white/5",
-              },
-              {
-                step: 2,
-                label: "取得推薦 hooks",
-                onClick: onRecommend,
-                disabled: busy,
-                cls: "border-white/15 text-ink-200 hover:bg-white/5",
-              },
-              {
-                step: 3,
-                label: "記錄 hint_shown",
-                onClick: onMarkHintShown,
-                disabled: busy || !selectedHook,
-                cls: "border-white/15 text-ink-200 hover:bg-white/5",
-              },
-              {
-                step: 4,
-                label: "記錄 aha_reported",
-                onClick: onMarkAha,
-                disabled: busy || !selectedHook,
-                cls: "border-white/15 text-ink-200 hover:bg-white/5",
-              },
-            ].map(({ step, label, onClick, disabled, cls }) => (
-              <button
-                key={step}
-                type="button"
-                disabled={disabled}
-                onClick={onClick}
-                data-track={`lab/step${step}`}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition disabled:opacity-50 ${cls}`}
-              >
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-ink-700 text-[10px] font-bold text-ink-300">
-                  {step}
-                </span>
-                {label}
-              </button>
-            ))}
+
             <button
               type="button"
-              disabled={busy || !selectedHook}
-              onClick={() => onMarkAnswer(true)}
-              data-track="lab/answer_correct"
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50 transition"
+              disabled={busy || !membership.canGenerate}
+              onClick={onSuggest}
+              className={`${btnBase} text-sm`}
             >
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-900/60 text-[10px] font-bold text-emerald-300">
-                5
-              </span>
-              記錄答對
+              <Sparkles className="h-3.5 w-3.5" />
+              隨機靈感（5 則中文主題）
             </button>
-            <button
-              type="button"
-              disabled={busy || !selectedHook}
-              onClick={() => onMarkAnswer(false)}
-              data-track="lab/answer_wrong"
-              className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50 transition"
-            >
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-900/60 text-[10px] font-bold text-rose-300">
-                5
-              </span>
-              記錄答錯
-            </button>
-          </div>
-          {hooks.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-xs text-ink-500">推薦 hook（點選一則作為事件上下文）</div>
-              <div className="grid gap-2">
-                {hooks.map((h) => (
+
+            <textarea
+              value={lines}
+              onChange={(e) => setLines(e.target.value)}
+              rows={8}
+              placeholder="每行一個概念，例如：熵增定律"
+              className="w-full border border-black p-4 text-sm font-mono"
+            />
+
+            <div className="flex flex-wrap gap-4 items-center text-sm text-gray-600">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={force}
+                  onChange={(e) => setForce(e.target.checked)}
+                  className="border border-black"
+                />
+                強制覆寫已存在主題
+              </label>
+              <label className="flex items-center gap-2">
+                請求間隔（秒）
+                <input
+                  type="number"
+                  min={0}
+                  max={3}
+                  step={0.1}
+                  value={delay}
+                  onChange={(e) => setDelay(Number(e.target.value))}
+                  className="w-20 border border-black px-2 py-1"
+                />
+              </label>
+            </div>
+
+            {/* Contribution mode */}
+            <div className="border border-black/30 p-3 space-y-2 text-sm">
+              <p className="text-xs font-medium uppercase">生成後處理方式</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["private_use", "自己收著用"],
+                  ["named_contribution", `具名貢獻（${membership.contributorLabel || "會員名稱"}）`],
+                ] as const).map(([value, label]) => (
                   <button
-                    key={`${h.id}-${h.hook_variant_id}`}
+                    key={value}
                     type="button"
-                    onClick={() => setSelectedHook(h)}
-                    data-track="lab/hook_select"
+                    onClick={() => setContributionMode(value)}
                     className={[
-                      "rounded-lg border px-3 py-2 text-left text-xs",
-                      selectedHook?.id === h.id
-                        ? "border-accent/50 bg-accent/10 text-white"
-                        : "border-white/10 text-ink-300 hover:bg-white/5",
+                      "border px-3 py-1.5 text-xs",
+                      contributionMode === value
+                        ? "border-2 border-black font-semibold"
+                        : "border border-black/30",
                     ].join(" ")}
                   >
-                    <div className="font-medium">
-                      {h.hook_type} · {h.hook_variant_id}
-                    </div>
-                    <div className="text-ink-400 line-clamp-2">{h.hook_text}</div>
-                    <div className="text-[11px] text-ink-500">
-                      score={h.score ?? 0} / aha_rate={h.metrics?.aha_rate ?? 0} / lift={h.metrics?.lift ?? 0}
-                    </div>
+                    {label}
                   </button>
                 ))}
               </div>
+              <p className="text-xs text-gray-500">具名貢獻寫入公開知識庫；自己收著用存到個人存儲不公開。</p>
             </div>
-          )}
-        </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-ink-500 uppercase">主核心領域</label>
-            <select
-              value={primary}
-              onChange={(e) => {
-                setPrimary(e.target.value);
-                setAux((prev) => prev.filter((c) => c !== e.target.value));
-              }}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink-900/60 px-3 py-2 text-sm text-white"
-            >
-              {FLAT.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-ink-500 uppercase mb-2 block">
-              輔助視角（點選切換，可多選）
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {FLAT.filter((c) => c !== primary).map((c) => (
+            {/* Launch button */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={busy || !membership.canGenerate}
+                onClick={onStreamBatch}
+                className="inline-flex items-center gap-2 border-2 border-black px-6 py-3 text-sm font-medium disabled:opacity-40"
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                啟動串流解碼（最多 30 則）
+              </button>
+              {streaming && (
                 <button
-                  key={c}
                   type="button"
-                  onClick={() =>
-                    setAux((prev) =>
-                      prev.includes(c)
-                        ? prev.filter((x) => x !== c)
-                        : [...prev, c]
-                    )
-                  }
-                  className={[
-                    "rounded-full px-3 py-1 text-xs font-medium border transition-all duration-150",
-                    aux.includes(c)
-                      ? "border-accent/50 bg-accent/15 text-accent-glow ring-1 ring-accent/20"
-                      : "border-white/10 text-ink-400 hover:border-white/25 hover:text-ink-200",
-                  ].join(" ")}
+                  onClick={onCancel}
+                  className="inline-flex items-center gap-2 border border-red-600 text-red-600 px-4 py-3 text-sm font-medium"
                 >
-                  {c}
+                  <StopCircle className="h-4 w-4" />
+                  取消
                 </button>
+              )}
+            </div>
+
+            {log && <p className="text-sm text-gray-700">{log}</p>}
+
+            {/* SSE Progress */}
+            {streamItems.length > 0 && (
+              <BatchProgress
+                items={streamItems}
+                total={streamTotal}
+                complete={streamComplete}
+                onCancel={streaming ? onCancel : undefined}
+              />
+            )}
+
+            {/* Queue controls */}
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-black/10">
+              <button
+                type="button"
+                onClick={() => setLines("")}
+                disabled={!lines.trim()}
+                className="inline-flex items-center gap-1.5 border border-black/30 px-3 py-1.5 text-xs disabled:opacity-30"
+              >
+                清空佇列
+              </button>
+              <label className="inline-flex items-center gap-1.5 border border-black/30 px-3 py-1.5 text-xs cursor-pointer hover:border-black">
+                <Upload className="h-3.5 w-3.5" />
+                匯入 TXT/CSV
+                <input
+                  type="file"
+                  accept=".txt,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const text = reader.result as string;
+                      setLines((prev) => (prev ? prev + "\n" : "") + text.trim());
+                    };
+                    reader.readAsText(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const blob = new Blob([lines], { type: "text/plain" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "topic_queue.txt"; a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                disabled={!lines.trim()}
+                className="inline-flex items-center gap-1.5 border border-black/30 px-3 py-1.5 text-xs disabled:opacity-30"
+              >
+                <Save className="h-3.5 w-3.5" />
+                匯出佇列
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+function LabStats() {
+  const membership = useMembership();
+  const { data, isLoading } = useQuery({
+    queryKey: ["lab-stats"],
+    queryFn: () => fetchMemberStorage("decode_note"),
+    enabled: membership.signedIn,
+  });
+
+  if (!membership.signedIn) {
+    return (
+      <div className="border border-black/20 p-6 text-center text-sm text-gray-500">
+        登入後可查看學習統計。
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div className="text-sm text-gray-500 py-8 text-center">載入中…</div>;
+  }
+
+  const records = data ?? [];
+  const byDateObj: Record<string, number> = {};
+  const byCatObj: Record<string, number> = {};
+
+  for (const r of records) {
+    const date = (r.created_at || "").slice(0, 10);
+    if (date) byDateObj[date] = (byDateObj[date] || 0) + 1;
+    const cat = String((r.metadata as Record<string, unknown>)?.category || r.feature || "其他");
+    byCatObj[cat] = (byCatObj[cat] || 0) + 1;
+  }
+
+  const dates = Object.entries(byDateObj).sort((a, b) => a[0].localeCompare(b[0])).slice(-14);
+  const cats = Object.entries(byCatObj).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const uniqueDates = Object.keys(byDateObj).length;
+  const uniqueCats = Object.keys(byCatObj).length;
+  const maxCount = Math.max(...dates.map((d) => d[1]), 1);
+
+  return (
+    <div className="space-y-6">
+      <div className="border border-black p-5 space-y-4">
+        <h2 className="text-sm font-bold uppercase">解碼總覽</h2>
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="border border-black/10 p-3">
+            <p className="text-2xl font-bold">{records.length}</p>
+            <p className="text-xs text-gray-500">總解碼數</p>
+          </div>
+          <div className="border border-black/10 p-3">
+            <p className="text-2xl font-bold">{uniqueDates}</p>
+            <p className="text-xs text-gray-500">活躍天數</p>
+          </div>
+          <div className="border border-black/10 p-3">
+            <p className="text-2xl font-bold">{uniqueCats}</p>
+            <p className="text-xs text-gray-500">涉及領域</p>
+          </div>
+        </div>
+
+        {/* Daily bar chart */}
+        {dates.length > 0 && (
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">近 14 天解碼量</h3>
+            <div className="flex items-end gap-1 h-24">
+              {dates.map(([date, count]) => (
+                <div key={date} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div
+                    className="w-full bg-black min-h-[2px]"
+                    style={{ height: `${(count / maxCount) * 100}%` }}
+                    title={`${date}: ${count}`}
+                  />
+                  <span className="text-[9px] text-gray-400">{date.slice(5)}</span>
+                </div>
               ))}
             </div>
           </div>
-        </div>
-        <p className="text-sm text-ink-300">
-          當前視角：<code className="text-accent-glow">{displayCat}</code>
-        </p>
+        )}
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onSuggest}
-            data-track="lab/suggest_topics"
-            className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2 text-sm text-ink-200 hover:bg-white/5 hover:text-white transition disabled:opacity-50"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-accent-glow" />
-            隨機靈感（5 則中文主題）
-          </button>
-        </div>
-
-        <textarea
-          value={lines}
-          onChange={(e) => setLines(e.target.value)}
-          rows={10}
-          placeholder="每行一個概念，例如：熵增定律"
-          className="w-full rounded-xl border border-white/10 bg-ink-950/60 p-4 text-sm text-white font-mono"
-        />
-
-        <div className="flex flex-wrap gap-4 items-center text-sm text-ink-400">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={force}
-              onChange={(e) => setForce(e.target.checked)}
-              className="rounded border-white/20"
-            />
-            強制覆寫已存在主題
-          </label>
-          <label className="flex items-center gap-2">
-            請求間隔（秒）
-            <input
-              type="number"
-              min={0}
-              max={3}
-              step={0.1}
-              value={delay}
-              onChange={(e) => setDelay(Number(e.target.value))}
-              className="w-20 rounded-lg border border-white/10 bg-ink-900 px-2 py-1 text-white"
-            />
-          </label>
-        </div>
-
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onBatch}
-          data-track="lab/batch_generate"
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-3 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-          啟動批量深度解碼（最多 30 則）
-        </button>
-
-        {log && <p className="text-sm text-sky-300">{log}</p>}
-
-        {result && (
-          <div className="rounded-xl border border-white/10 bg-ink-900/40 p-4 text-sm space-y-2">
-            {result.saved.length > 0 && (
-              <div>
-                <div className="text-emerald-400 font-medium">已寫入</div>
-                <ul className="text-ink-300 list-disc pl-5">
-                  {result.saved.map((s) => (
-                    <li key={s.word}>
-                      {s.word} → {s.saved_to}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {result.skipped.length > 0 && (
-              <div>
-                <div className="text-amber-400 font-medium">跳過（已存在）</div>
-                <p className="text-ink-400">{result.skipped.join("、")}</p>
-              </div>
-            )}
-            {result.errors.length > 0 && (
-              <div>
-                <div className="text-red-400 font-medium">錯誤</div>
-                <ul className="text-ink-400 list-disc pl-5">
-                  {result.errors.map((e) => (
-                    <li key={e.word}>
-                      {e.word}: {e.detail}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+        {/* Category distribution */}
+        {cats.length > 0 && (
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">領域分布</h3>
+            <div className="space-y-1">
+              {cats.map(([cat, count]) => (
+                <div key={cat} className="flex items-center gap-2 text-xs">
+                  <span className="w-20 truncate text-gray-600">{cat}</span>
+                  <div className="flex-1 bg-gray-100 h-3">
+                    <div className="bg-black h-full" style={{ width: `${(count / records.length) * 100}%` }} />
+                  </div>
+                  <span className="text-gray-500 w-6 text-right">{count}</span>
+                </div>
+              ))}
+            </div>
           </div>
+        )}
+
+        {records.length === 0 && (
+          <p className="text-sm text-gray-500 text-center py-4">尚無解碼紀錄。開始批量解碼後，統計資料會出現在這裡。</p>
         )}
       </div>
     </div>

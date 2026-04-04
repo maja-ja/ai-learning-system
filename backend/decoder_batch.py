@@ -13,6 +13,7 @@ from google.genai import types
 
 from .schemas import KnowledgeCard
 from .model_router import resolve_gemini_model
+from .prompts_prod import build_decode_system_prompt, build_random_topics_prompt, decode_user_message
 
 CORE_COLS = list(KnowledgeCard.model_fields.keys())
 
@@ -21,36 +22,17 @@ def decode_interdisciplinary(
     input_text: str,
     primary_cat: str,
     aux_cats: Optional[List[str]] = None,
+    user_key: str = "",
 ) -> Optional[Dict[str, str]]:
     aux_cats = aux_cats or []
-    key = os.getenv("GEMINI_API_KEY", "").strip()
+    key = user_key.strip() or os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
-        raise ValueError("批量解碼需設定 GEMINI_API_KEY（與網頁單筆解碼可並用不同設定）")
+        raise ValueError("請在頁面上方設定您的 Gemini API Key")
 
     combined_cats = " + ".join([primary_cat] + list(aux_cats))
 
-    system_prompt = f"""
-Role: 全領域知識解構專家 (Interdisciplinary Polymath Decoder).
-Task: 針對輸入內容進行深度拆解，輸出高品質 JSON。
-
-【核心視角】：
-以「{primary_cat}」為框架，揉合「{", ".join(aux_cats) if aux_cats else "通用百科"}」視角進行交叉解碼。
-
-【🚫 絕對禁令】：
-- 嚴禁任何開場白或結尾語。直接進入知識點。
-- 嚴禁在 JSON 之外輸出任何文字。
-
-【📐 輸出規範】：
-1. 必須輸出純 JSON，嚴禁 ```json 標籤。
-2. LaTeX 雙重轉義：使用 \\\\frac 等形式。
-3. JSON 內換行使用 \\\\n。
-
-【📋 欄位】：word, category, roots, breakdown, definition, meaning, native_vibe,
-example, synonym_nuance, usage_warning, memory_hook, phonetic
-其中 category 必須為「{combined_cats}」。
-"""
-
-    final_prompt = f"{system_prompt}\n\n解碼目標：「{input_text}」"
+    system_prompt = build_decode_system_prompt(primary_cat, aux_cats)
+    final_prompt = f"{system_prompt}\n\n{decode_user_message(input_text.strip())}"
     client = genai.Client(api_key=key)
     model = resolve_gemini_model(tier="quality")
 
@@ -88,23 +70,14 @@ example, synonym_nuance, usage_warning, memory_hook, phonetic
     return out
 
 
-def suggest_topics(primary_cat: str, aux_cats: Optional[List[str]] = None, count: int = 5) -> str:
-    key = os.getenv("GEMINI_API_KEY", "").strip()
+def suggest_topics(
+    primary_cat: str, aux_cats: Optional[List[str]] = None, count: int = 5, user_key: str = "",
+) -> str:
+    key = user_key.strip() or os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
-        raise ValueError("需設定 GEMINI_API_KEY")
+        raise ValueError("請在頁面上方設定您的 Gemini API Key")
     aux_cats = aux_cats or []
-    combined = " + ".join([primary_cat] + list(aux_cats))
-    prompt = f"""
-你是一位博學的知識策展人。
-請針對「{combined}」這個領域組合，推薦 {count} 個具備深度學習價值的「繁體中文」主題或概念。
-
-【絕對要求】：
-1. 只輸出主題名稱，每個主題一行。
-2. 必須使用繁體中文。
-3. 嚴禁開場白、結尾、編號或解釋。
-4. 嚴禁 Markdown。
-5. 嚴禁標點符號。
-"""
+    prompt = build_random_topics_prompt(primary_cat, aux_cats, count)
     client = genai.Client(api_key=key)
     # topic suggestion can use lower-cost tier model
     model = resolve_gemini_model(tier="cheap")

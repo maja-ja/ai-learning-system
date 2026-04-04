@@ -4,8 +4,14 @@ import time
 import hmac
 import hashlib
 import base64
+from uuid import uuid4
 from pathlib import Path
 from typing import Optional, List, Tuple, Any, Dict
+
+from dotenv import load_dotenv
+
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_env_path, override=False)
 
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,17 +26,21 @@ from . import handout_gen
 from . import handout_html
 from . import knowledge_export
 from . import database as db
+from .member_auth import (
+    MemberContext,
+    consume_generation_credit,
+    require_member_generation_access,
+    require_member_identity,
+)
 from .model_router import resolve_task_config
 from .schemas import (
-    LearnerContextUpsertBody,
-    AhaHookRecommendQuery,
-    AhaEventIngestBody,
-    AhaEventBatchIngestBody,
-    MaintenanceBackfillVariantBody,
     ClickEventsBatchBody,
 )
+from backend.log import get_logger
 
-app = FastAPI(title="AI 教育工作站 - Cloud Core")
+logger = get_logger(__name__)
+
+app = FastAPI(title="Etymon Decoder API")
 
 _cors_allow_custom = os.getenv("CORS_ALLOW_ORIGIN_REGEX", "").strip()
 _cors_origins = [
@@ -115,6 +125,18 @@ exam_bearer = HTTPBearer(auto_error=False)
 maintenance_bearer = HTTPBearer(auto_error=False)
 MAINTENANCE_TOKEN = os.getenv("MAINTENANCE_TOKEN", "").strip()
 
+# --- 啟動安全檢查 ---
+_is_local = os.getenv("ALLOW_DEV_DEFAULTS", "").strip().lower() in ("1", "true", "yes", "on")
+if not _is_local:
+    if APP_PASSWORD == "abcd":
+        logger.warning(
+            "APP_PASSWORD 仍為預設值 'abcd'，正式環境請設定強密碼或 ALLOW_DEV_DEFAULTS=1 略過。"
+        )
+    if EXAM_TOKEN_SECRET == "dev-exam-secret-change-me":
+        logger.warning(
+            "EXAM_TOKEN_SECRET 仍為預設值，正式環境請設定隨機字串或 ALLOW_DEV_DEFAULTS=1 略過。"
+        )
+
 # 核心欄位定義
 CORE_COLS = [
     'word', 'category', 'roots', 'breakdown', 'definition',
@@ -183,8 +205,13 @@ def _exam_edit_allowed(request: Request) -> bool:
     return not _request_is_https(request)
 
 
-def _persist_knowledge_row(parsed_data: dict) -> None:
-    """寫入本機 SQLite 知識庫。"""
+def _persist_knowledge_row(parsed_data: dict, member: Optional[MemberContext] = None) -> None:
+    """公開知識庫雙寫：Postgres 為真源，SQLite 保留本機快取。"""
+    if member is not None:
+        try:
+            db.knowledge_sync_to_supabase(member.tenant_id, member.profile_id, parsed_data)
+        except Exception as e:
+            logger.warning("Knowledge sync warning: %s", e)
     db.knowledge_upsert(parsed_data)
 
 
@@ -201,6 +228,7 @@ def _safe_note_path(subject: str, chapter: str, unit: str) -> Path:
 
 class NoteInput(BaseModel):
     text: str
+    contribution_mode: str = "private_use"
 
 class RawNoteCreate(BaseModel):
     title: Optional[str] = ""
@@ -211,6 +239,9 @@ class RawNoteUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     tags: Optional[str] = None
+
+class MemberStorageDeleteBody(BaseModel):
+    record_id: str
 
 
 class ExamPasswordBody(BaseModel):
@@ -230,6 +261,7 @@ class BatchDecodeBody(BaseModel):
     aux_categories: List[str] = Field(default_factory=list)
     force_refresh: bool = False
     delay_sec: float = Field(0.5, ge=0, le=3)
+    contribution_mode: str = "private_use"
 
 
 class SuggestTopicsBody(BaseModel):
@@ -242,6 +274,9 @@ class HandoutGenerateBody(BaseModel):
     manual_input: str = ""
     instruction: str = ""
     image_base64: Optional[str] = None
+    contribution_mode: str = "private_use"
+    title: str = "專題講義"
+    language: str = Field("zh-TW", description="zh-TW | en | bilingual")
 
 
 class HandoutHtmlBody(BaseModel):
@@ -251,27 +286,71 @@ class HandoutHtmlBody(BaseModel):
     img_width_percent: int = Field(80, ge=20, le=100)
 
 
+def _user_gemini_key(request: Request) -> str:
+    """從請求 header 取得使用者自帶的 Gemini Key（BYOK）。"""
+    return (request.headers.get("x-user-gemini-key") or "").strip()
+
+
+def _require_ai_access(request: Request, member: Optional[MemberContext] = None):
+    """有使用者自帶 key 或有伺服器 key 或有會員額度，三者滿足其一即可。"""
+    if _user_gemini_key(request):
+        return
+    if os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip():
+        return
+    raise HTTPException(status_code=400, detail="請在頁面上方設定您的 Gemini API Key")
+
+
 @app.post("/decode")
-async def decode_note(note: NoteInput):
+async def decode_note(
+    note: NoteInput,
+    request: Request,
+    member: MemberContext = Depends(require_member_generation_access),
+):
     if AI_FEATURE_LOCKED:
         raise HTTPException(status_code=503, detail="AI feature is temporarily locked for optimization")
 
     if not note.text.strip():
         raise HTTPException(status_code=400, detail="Empty content")
 
+    user_key = _user_gemini_key(request)
     try:
-        parsed_data, ai_used = ai_decode.decode_to_knowledge_card(note.text)
-        _persist_knowledge_row(parsed_data)
+        parsed_data, ai_used = ai_decode.decode_to_knowledge_card(note.text, user_gemini_key=user_key)
+        saved_to = "private"
+        if note.contribution_mode == "named_contribution":
+            parsed_data["model"] = ai_used
+            _persist_knowledge_row(parsed_data, member)
+            saved_to = "local"
+        else:
+            db.member_storage_create(
+                member.tenant_id,
+                member.profile_id,
+                feature="decode_note",
+                title=str(parsed_data.get("word") or "私人解碼"),
+                contribution_mode=note.contribution_mode,
+                input_text=note.text,
+                output_json=parsed_data,
+                metadata={"ai_provider": ai_used},
+            )
+        usage = consume_generation_credit(
+            member,
+            str(uuid4()),
+            metadata={
+                "feature": "decode_note",
+                "contribution_mode": note.contribution_mode,
+            },
+        )
 
         return {
             "status": "success",
             "data": parsed_data,
-            "saved_to": "local",
+            "saved_to": saved_to,
             "ai_provider": ai_used,
+            "contribution_mode": note.contribution_mode,
+            "usage": usage,
         }
 
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error("Error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/notes")
@@ -280,7 +359,7 @@ def list_notes():
         rows = db.notes_list()
         return {"data": rows}
     except Exception as e:
-        print(f"List notes error: {e}")
+        logger.error("List notes error: %s", e)
         raise HTTPException(status_code=500, detail="Could not load notes")
 
 @app.post("/notes")
@@ -297,7 +376,7 @@ def create_note(note: RawNoteCreate):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Create note error: {e}")
+        logger.error("Create note error: %s", e)
         raise HTTPException(status_code=500, detail="Could not create note")
 
 @app.put("/notes/{note_id}")
@@ -318,7 +397,7 @@ def update_note(note_id: int, note: RawNoteUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Update note error: {e}")
+        logger.error("Update note error: %s", e)
         raise HTTPException(status_code=500, detail="Could not update note")
 
 @app.delete("/notes/{note_id}")
@@ -327,7 +406,7 @@ def delete_note(note_id: int):
         db.notes_delete(note_id)
         return {"data": {"id": note_id}}
     except Exception as e:
-        print(f"Delete note error: {e}")
+        logger.error("Delete note error: %s", e)
         raise HTTPException(status_code=500, detail="Could not delete note")
 
 
@@ -337,25 +416,8 @@ def _merge_knowledge_rows() -> Tuple[List[Any], str]:
         rows = db.knowledge_list()
         return rows, "local"
     except Exception as e:
-        print(f"Knowledge read error: {e}")
+        logger.error("Knowledge read error: %s", e)
         return [], "local"
-
-
-def _tag_match(tags: List[str], value: str) -> bool:
-    if not tags:
-        return True
-    if not value:
-        return False
-    return value in tags
-
-
-def _to_float(v: Any, default: float = 0.0) -> float:
-    try:
-        if v is None:
-            return default
-        return float(v)
-    except (ValueError, TypeError):
-        return default
 
 
 @app.get("/api/knowledge")
@@ -364,7 +426,7 @@ def api_list_knowledge():
         rows, source = _merge_knowledge_rows()
         return {"data": rows, "meta": {"source": source}}
     except Exception as e:
-        print(f"Knowledge list error: {e}")
+        logger.error("Knowledge list error: %s", e)
         raise HTTPException(status_code=500, detail="無法載入知識庫")
 
 
@@ -377,177 +439,27 @@ def api_list_roots():
             data = json.load(f)
         return {"data": data if isinstance(data, list) else []}
     except Exception as e:
-        print(f"Roots read error: {e}")
+        logger.error("Roots read error: %s", e)
         raise HTTPException(status_code=500, detail="無法讀取字根資料")
-
-
-@app.post("/api/learner/context")
-def api_upsert_learner_context(body: LearnerContextUpsertBody):
-    payload = body.model_dump()
-    try:
-        result = db.learner_context_upsert(payload)
-        return {"data": result}
-    except Exception as e:
-        print(f"Learner context upsert error: {e}")
-        raise HTTPException(status_code=500, detail="無法儲存學習者背景")
-
-
-@app.get("/api/aha/hooks/recommend")
-def api_recommend_aha_hooks(
-    tenant_id: str,
-    profile_id: str,
-    topic_key: str,
-    limit: int = 5,
-):
-    q = AhaHookRecommendQuery(
-        tenant_id=tenant_id,
-        profile_id=profile_id,
-        topic_key=topic_key,
-        limit=limit,
-    )
-    try:
-        context = (
-            db.learner_context_get(q.tenant_id, q.profile_id)
-            or {"age_band": "", "region_code": ""}
-        )
-        age_band = str(context.get("age_band", "") or "")
-        region_code = str(context.get("region_code", "") or "")
-
-        hooks = db.aha_hooks_get_active(q.tenant_id, q.topic_key)
-        filtered: List[Dict[str, Any]] = []
-        for h in hooks:
-            age_tags = [str(x) for x in (h.get("age_tags") or [])]
-            region_tags = [str(x) for x in (h.get("region_tags") or [])]
-            if _tag_match(age_tags, age_band) and _tag_match(region_tags, region_code):
-                filtered.append(h)
-        if not filtered:
-            filtered = hooks
-
-        perf_rows = db.aha_hook_effectiveness_get(
-            q.tenant_id,
-            q.topic_key,
-            age_band if age_band else "unknown",
-            region_code if region_code else "unknown",
-        )
-        perf_map = {
-            f"{r.get('hook_type')}::{r.get('hook_variant_id')}": r for r in perf_rows
-        }
-
-        ranked = []
-        for h in filtered:
-            key = f"{h.get('hook_type')}::{h.get('hook_variant_id')}"
-            perf = perf_map.get(key, {})
-            impressions = max(int(perf.get("impressions") or 0), 0)
-            aha_reports = max(int(perf.get("aha_reports") or 0), 0)
-            aha_rate = (aha_reports / impressions) if impressions > 0 else 0.0
-            lift = _to_float(perf.get("lift"), 0.0)
-            tta = _to_float(perf.get("time_to_aha"), 0.0)
-            speed_score = 0.5 if tta <= 0 else 1.0 / (1.0 + tta / 60000.0)
-            score = (aha_rate * 0.6) + (lift * 0.3) + (speed_score * 0.1)
-            ranked.append(
-                {
-                    **h,
-                    "score": round(score, 4),
-                    "metrics": {
-                        "aha_rate": round(aha_rate, 4),
-                        "lift": round(lift, 4),
-                        "time_to_aha_ms": int(tta) if tta > 0 else None,
-                    },
-                }
-            )
-        ranked.sort(key=lambda x: x.get("score", 0), reverse=True)
-        return {
-            "data": ranked[: q.limit],
-            "meta": {
-                "age_band": age_band or "unknown",
-                "region_code": region_code or "unknown",
-                "pool_size": len(ranked),
-            },
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Aha hook recommendation error: {e}")
-        raise HTTPException(status_code=500, detail="無法推薦 Aha hook")
-
-
-@app.post("/api/aha/events")
-def api_ingest_aha_event(body: AhaEventIngestBody):
-    payload = body.model_dump(exclude_none=True)
-    try:
-        result = db.aha_event_insert(payload)
-        return {"data": result}
-    except Exception as e:
-        print(f"Aha event insert error: {e}")
-        raise HTTPException(status_code=500, detail="無法寫入 Aha 事件")
-
-
-@app.post("/api/aha/events/batch")
-def api_ingest_aha_events_batch(body: AhaEventBatchIngestBody):
-    events = [e.model_dump(exclude_none=True) for e in body.events]
-    if not events:
-        return {"inserted": 0, "data": []}
-    try:
-        rows = db.aha_events_insert_batch(events)
-        return {"inserted": len(rows), "data": rows}
-    except Exception as e:
-        print(f"Aha events batch insert error: {e}")
-        raise HTTPException(status_code=500, detail="批次寫入 Aha 事件失敗")
 
 
 @app.get("/api/admin/db/status", dependencies=[Depends(require_maintenance_auth)])
 def api_admin_db_status():
     status = db.db_status_snapshot()
     status["tables"] = {}
-    for table_name in ("learner_contexts", "aha_hooks", "learning_attempts", "aha_events"):
+    for table_name in (
+        "learner_contexts",
+        "aha_hooks",
+        "learning_attempts",
+        "aha_events",
+        "member_storage",
+        "click_events",
+    ):
         try:
             status["tables"][table_name] = db.table_count(table_name)
         except Exception as ex:
             status["tables"][table_name] = f"error: {ex}"
     return status
-
-
-@app.post("/api/admin/aha/events/backfill-variant", dependencies=[Depends(require_maintenance_auth)])
-def api_admin_backfill_hook_variant(body: MaintenanceBackfillVariantBody):
-    try:
-        missing_rows = db.aha_events_needing_variant(body.limit, body.tenant_id)
-        if not missing_rows:
-            return {"scanned": 0, "candidates": 0, "updated": 0, "dry_run": body.dry_run}
-
-        hook_ids = sorted({str(r.get("hook_id")) for r in missing_rows if r.get("hook_id")})
-        hooks_rows = db.aha_hooks_get_by_ids(hook_ids)
-        hook_map = {
-            str(r.get("id")): str(r.get("hook_variant_id") or "").strip()
-            for r in hooks_rows
-        }
-        candidates = []
-        for ev in missing_rows:
-            hv = hook_map.get(str(ev.get("hook_id")), "")
-            if hv:
-                candidates.append({"event_id": ev.get("id"), "hook_variant_id": hv})
-
-        if body.dry_run:
-            return {
-                "scanned": len(missing_rows),
-                "candidates": len(candidates),
-                "updated": 0,
-                "dry_run": True,
-                "sample": candidates[:20],
-            }
-
-        updated = 0
-        for c in candidates:
-            db.aha_event_update_variant(c["event_id"], c["hook_variant_id"])
-            updated += 1
-        return {
-            "scanned": len(missing_rows),
-            "candidates": len(candidates),
-            "updated": updated,
-            "dry_run": False,
-        }
-    except Exception as e:
-        print(f"Admin backfill hook variant error: {e}")
-        raise HTTPException(status_code=500, detail="回填 hook_variant_id 失敗")
 
 
 @app.post("/api/exam/login")
@@ -668,8 +580,45 @@ def api_export_knowledge_zip():
     )
 
 
+@app.get("/api/knowledge/export-anki")
+def api_export_anki_tsv():
+    """匯出 Anki 可匯入的 TSV（front=word+category, back=定義+拆解+記憶鉤子）。"""
+    rows, _ = _merge_knowledge_rows()
+    lines = []
+    for r in rows:
+        word = str(r.get("word", "")).strip()
+        if not word:
+            continue
+        cat = str(r.get("category", "")).strip()
+        definition = str(r.get("definition", "")).strip()
+        breakdown = str(r.get("breakdown", "")).strip().replace("\n", "<br>")
+        hook = str(r.get("memory_hook", "")).strip()
+        front = f"{word}"
+        if cat:
+            front += f" [{cat}]"
+        back_parts = []
+        if definition:
+            back_parts.append(definition)
+        if breakdown:
+            back_parts.append(f"<br><b>拆解：</b>{breakdown}")
+        if hook:
+            back_parts.append(f"<br><b>記憶：</b>{hook}")
+        back = "".join(back_parts) or "—"
+        lines.append(f"{front}\t{back}")
+    tsv = "\n".join(lines)
+    return Response(
+        content=tsv,
+        media_type="text/tab-separated-values; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="etymon_anki.tsv"'},
+    )
+
+
 @app.post("/api/decode/batch")
-def api_batch_decode(body: BatchDecodeBody):
+def api_batch_decode(
+    body: BatchDecodeBody,
+    request: Request,
+    member: MemberContext = Depends(require_member_generation_access),
+):
     if AI_FEATURE_LOCKED:
         raise HTTPException(
             status_code=503,
@@ -687,6 +636,7 @@ def api_batch_decode(body: BatchDecodeBody):
     saved: List[dict] = []
     skipped: List[str] = []
     errors: List[dict] = []
+    generated_units = 0
     for i, word in enumerate(raw):
         key = word.lower()
         if key in existing and not body.force_refresh:
@@ -694,37 +644,162 @@ def api_batch_decode(body: BatchDecodeBody):
             continue
         try:
             row = decoder_batch.decode_interdisciplinary(
-                word, body.primary_category, body.aux_categories
+                word, body.primary_category, body.aux_categories,
+                user_key=_user_gemini_key(request),
             )
             if not row:
                 errors.append({"word": word, "detail": "模型未回傳有效 JSON"})
                 continue
-            _persist_knowledge_row(row)
-            saved.append({"word": word, "saved_to": "local"})
+            saved_to = "private"
+            if body.contribution_mode == "named_contribution":
+                row["model"] = ai_decode.resolve_ai_provider()
+                _persist_knowledge_row(row, member)
+                saved_to = "local"
+            saved.append({"word": word, "saved_to": saved_to})
+            generated_units += 1
             existing.add(key)
         except Exception as e:
             errors.append({"word": word, "detail": str(e)})
         if i < len(raw) - 1 and body.delay_sec > 0:
             time.sleep(body.delay_sec)
-    return {"saved": saved, "skipped": skipped, "errors": errors}
+    usage = (
+        consume_generation_credit(
+            member,
+            str(uuid4()),
+            units=max(generated_units, 1),
+            metadata={
+                "feature": "decode_batch",
+                "generated_units": generated_units,
+                "contribution_mode": body.contribution_mode,
+            },
+        )
+        if generated_units > 0
+        else None
+    )
+    return {"saved": saved, "skipped": skipped, "errors": errors, "usage": usage}
+
+
+# --- SSE 串流批量解碼 ---
+
+from fastapi.responses import StreamingResponse
+import asyncio
+
+@app.post("/api/decode/batch-stream")
+async def api_batch_decode_stream(
+    body: BatchDecodeBody,
+    request: Request,
+    member: MemberContext = Depends(require_member_generation_access),
+):
+    if AI_FEATURE_LOCKED:
+        raise HTTPException(status_code=503, detail="AI feature is locked")
+    raw = [w.strip() for w in body.words if str(w).strip()][:30]
+    if not raw:
+        raise HTTPException(status_code=400, detail="請提供至少一個主題")
+
+    merged, _ = _merge_knowledge_rows()
+    existing = {
+        str(r.get("word", "")).lower().strip()
+        for r in merged if r.get("word")
+    }
+
+    async def generate():
+        generated_units = 0
+        for i, word in enumerate(raw):
+            key = word.lower()
+            if key in existing and not body.force_refresh:
+                yield f"data: {json.dumps({'i': i, 'total': len(raw), 'word': word, 'status': 'skipped'}, ensure_ascii=False)}\n\n"
+                continue
+            yield f"data: {json.dumps({'i': i, 'total': len(raw), 'word': word, 'status': 'processing'}, ensure_ascii=False)}\n\n"
+            try:
+                row = await asyncio.to_thread(
+                    decoder_batch.decode_interdisciplinary,
+                    word, body.primary_category, body.aux_categories,
+                    _user_gemini_key(request),
+                )
+                if not row:
+                    yield f"data: {json.dumps({'i': i, 'total': len(raw), 'word': word, 'status': 'error', 'detail': '模型未回傳有效 JSON'}, ensure_ascii=False)}\n\n"
+                    continue
+                saved_to = "private"
+                if body.contribution_mode == "named_contribution":
+                    row["model"] = ai_decode.resolve_ai_provider()
+                    _persist_knowledge_row(row, member)
+                    saved_to = "local"
+                generated_units += 1
+                existing.add(key)
+                yield f"data: {json.dumps({'i': i, 'total': len(raw), 'word': word, 'status': 'done', 'saved_to': saved_to, 'row': row}, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'i': i, 'total': len(raw), 'word': word, 'status': 'error', 'detail': str(e)}, ensure_ascii=False)}\n\n"
+
+            if i < len(raw) - 1 and body.delay_sec > 0:
+                await asyncio.sleep(body.delay_sec)
+
+        if generated_units > 0:
+            consume_generation_credit(
+                member, str(uuid4()), units=max(generated_units, 1),
+                metadata={"feature": "decode_batch_stream", "generated_units": generated_units,
+                          "contribution_mode": body.contribution_mode},
+            )
+        yield f"data: {json.dumps({'status': 'complete', 'generated': generated_units}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+# --- 知識圖譜 API ---
+
+@app.get("/api/knowledge/graph")
+def api_knowledge_graph():
+    rows, _ = _merge_knowledge_rows()
+    nodes = []
+    cat_set: dict = {}
+    edges = []
+    for r in rows:
+        word = str(r.get("word", "")).strip()
+        cat = str(r.get("category", "")).strip()
+        if not word:
+            continue
+        node_id = f"w-{word}"
+        nodes.append({"id": node_id, "label": word, "category": cat, "type": "word"})
+        if cat and cat not in cat_set:
+            cat_set[cat] = f"c-{cat}"
+            nodes.append({"id": cat_set[cat], "label": cat, "type": "category"})
+        if cat and cat in cat_set:
+            edges.append({"from": cat_set[cat], "to": node_id})
+    return {"nodes": nodes, "edges": edges, "total": len(rows)}
 
 
 @app.post("/api/decode/suggest-topics")
-def api_suggest_topics(body: SuggestTopicsBody):
+def api_suggest_topics(
+    body: SuggestTopicsBody,
+    request: Request,
+    member: MemberContext = Depends(require_member_generation_access),
+):
     if AI_FEATURE_LOCKED:
         raise HTTPException(status_code=503, detail="AI feature is locked")
     try:
         text = decoder_batch.suggest_topics(
-            body.primary_category, body.aux_categories, body.count
+            body.primary_category, body.aux_categories, body.count,
+            user_key=_user_gemini_key(request),
         )
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        return {"lines": lines[: body.count]}
+        usage = consume_generation_credit(
+            member,
+            str(uuid4()),
+            metadata={
+                "feature": "suggest_topics",
+                "requested_count": body.count,
+            },
+        )
+        return {"lines": lines[: body.count], "usage": usage}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/handout/generate")
-def api_handout_generate(body: HandoutGenerateBody):
+def api_handout_generate(
+    body: HandoutGenerateBody,
+    request: Request,
+    member: MemberContext = Depends(require_member_generation_access),
+):
     if AI_FEATURE_LOCKED:
         raise HTTPException(status_code=503, detail="AI feature is locked")
     img_bytes = None
@@ -735,12 +810,41 @@ def api_handout_generate(body: HandoutGenerateBody):
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"圖片解碼失敗: {e}")
     try:
+        lang_hint = ""
+        if body.language == "en":
+            lang_hint = "\n語言指示：全文以英文撰寫。"
+        elif body.language == "bilingual":
+            lang_hint = "\n語言指示：以繁體中文為主，每個段落結尾附上英文摘要。"
+        instruction = (body.instruction or "") + lang_hint
         md = handout_gen.generate_handout_markdown(
             body.manual_input or "",
-            body.instruction or "",
+            instruction,
             img_bytes,
+            user_key=_user_gemini_key(request),
         )
-        return {"markdown": md}
+        db.member_storage_create(
+            member.tenant_id,
+            member.profile_id,
+            feature="handout_generate",
+            title=(body.title or "專題講義").strip() or "專題講義",
+            contribution_mode=body.contribution_mode,
+            input_text=body.manual_input or "",
+            output_text=md,
+            metadata={
+                "instruction": body.instruction or "",
+                "has_image": bool(body.image_base64),
+            },
+        )
+        usage = consume_generation_credit(
+            member,
+            str(uuid4()),
+            metadata={
+                "feature": "handout_generate",
+                "has_image": bool(body.image_base64),
+                "contribution_mode": body.contribution_mode,
+            },
+        )
+        return {"markdown": md, "usage": usage}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -760,6 +864,36 @@ def api_handout_preview_html(body: HandoutHtmlBody):
     return Response(content=html, media_type="text/html; charset=utf-8")
 
 
+@app.get("/api/member/storage")
+def api_member_storage_list(
+    feature: Optional[str] = None,
+    member: MemberContext = Depends(require_member_identity),
+):
+    try:
+        rows = db.member_storage_list(member.profile_id, feature=feature)
+        return {"data": rows}
+    except Exception as e:
+        logger.error("Member storage list error: %s", e)
+        raise HTTPException(status_code=500, detail="無法載入個人存儲")
+
+
+@app.delete("/api/member/storage")
+def api_member_storage_delete(
+    body: MemberStorageDeleteBody,
+    member: MemberContext = Depends(require_member_identity),
+):
+    try:
+        ok = db.member_storage_delete(member.profile_id, body.record_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="找不到存儲紀錄")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Member storage delete error: %s", e)
+        raise HTTPException(status_code=500, detail="無法刪除個人存儲")
+
+
 # ---------------------------------------------------------------------------
 # 點擊序列收集 & Markov 預測
 # ---------------------------------------------------------------------------
@@ -768,7 +902,12 @@ def api_handout_preview_html(body: HandoutHtmlBody):
 def api_tracking_clicks(body: ClickEventsBatchBody):
     """接收前端送來的點擊事件批次，寫入 click_events 表。"""
     events = [e.model_dump() for e in body.events]
-    saved = db.click_events_insert_batch(body.session_id, events)
+    saved = db.click_events_insert_batch(
+        body.session_id,
+        events,
+        tenant_id=body.tenant_id,
+        profile_id=body.profile_id,
+    )
     return {"ok": True, "saved": saved}
 
 
@@ -794,7 +933,8 @@ def root():
     if SERVE_WEB_DIST and (SPA_DIST / "index.html").is_file():
         return FileResponse(SPA_DIST / "index.html")
     return {
-        "service": "AI 教育工作站 API",
+        "service": "Etymon Decoder API",
+        "site": "https://etymon-decoder.com",
         "hint": "瀏覽器請開前端（本機通常為 http://127.0.0.1:5173 ）；單埠上線請 SERVE_WEB_DIST=1 並 npm run build",
         "health": "/health",
         "openapi_docs": "/docs",
@@ -822,7 +962,7 @@ def health_check():
         n_local = 0
     return {
         "status": "ok",
-        "supabase": False,
+        "supabase": db.supabase_enabled(),
         "local_knowledge_rows": n_local,
         "ai_locked": AI_FEATURE_LOCKED,
         "ai_provider_config": ai_decode.resolve_ai_provider(),

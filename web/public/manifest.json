@@ -1,0 +1,17 @@
+{
+  "name": "Etymon Decoder",
+  "short_name": "Etymon",
+  "description": "字根、知識庫與解碼學習介面",
+  "start_url": "/knowledge",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/og-homepage.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

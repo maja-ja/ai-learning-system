@@ -4,6 +4,7 @@ import { parseDecodeJson } from "../_shared/json.ts";
 import {
   CORE_FIELDS,
   buildDecodeSystemPrompt,
+  buildDecodeUserMessage,
   type CoreField,
 } from "../_shared/prompts.ts";
 import { assertInternalSecret, requireClerkUserId } from "../_shared/auth.ts";
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
   }
 
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
+  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
   if (!apiKey) {
     return jsonResponse({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
   }
@@ -112,7 +113,7 @@ Deno.serve(async (req) => {
     : primary;
 
   const system = buildDecodeSystemPrompt(primary, aux);
-  const finalPrompt = `${system}\n\n解碼目標：「${input}」`;
+  const finalPrompt = `${system}\n\n${buildDecodeUserMessage(input)}`;
 
   const t0 = performance.now();
 
@@ -169,7 +170,7 @@ Deno.serve(async (req) => {
         memory_hook: row.memory_hook,
         phonetic: row.phonetic,
         model,
-        prompt_version: "decode_v1",
+        prompt_version: "decode_prod_v1",
       };
 
       const { data: hit } = await supabase

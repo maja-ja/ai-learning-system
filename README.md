@@ -1,6 +1,6 @@
-# AI 教育工作站
+# Etymon Decoder
 
-主介面為 **Vite + React**（`web/`），後端 **FastAPI**（`backend/`），資料儲存於本機 **SQLite**（`backend/local.db`）。
+正式網域：**https://etymon-decoder.com**。主介面為 **Vite + React**（`web/`），後端 **FastAPI**（`backend/`），資料儲存於本機 **SQLite**（`backend/local.db`）。
 
 ## 架構概覽
 
@@ -68,6 +68,7 @@ cd web && npm run build
 | `GET /api/knowledge` | 讀取本機 SQLite 知識庫；回傳 `meta.source: "local"` |
 | `POST /decode` | 預設**開放**；AI 解碼後寫入本機 SQLite |
 | `GET/POST /notes` | 本機 SQLite 筆記 CRUD |
+| SQLite 備份 | 見 `docs/deploy/LOCAL-SQLITE-BACKUP.md` |
 | `GEMINI_API_KEY` | 使用 Gemini 時必填 |
 | `ANTHROPIC_API_KEY` | 使用 Claude 時必填 |
 | `AI_PROVIDER` | `gemini` / `claude` / `auto`（預設 **auto**：有 Anthropic 金鑰則走 Claude，否則 Gemini） |
@@ -98,12 +99,7 @@ cd web && npm run build
 - `POST /decode` — 單筆 AI 解碼並儲存（Claude／Gemini）
 - `POST /api/decode/batch` — 批量解碼（**Gemini**，跨領域視角）
 - `POST /api/decode/suggest-topics` — 隨機主題靈感
-- `POST /api/learner/context` — 設定學習者年齡層與地區背景
-- `GET /api/aha/hooks/recommend` — 依 age_band/region_code 推薦 Aha hook
-- `POST /api/aha/events` — 單筆 Aha 事件寫入
-- `POST /api/aha/events/batch` — 批次 Aha 事件寫入
 - `GET /api/admin/db/status` — 維運檢查資料庫狀態（需 `MAINTENANCE_TOKEN`）
-- `POST /api/admin/aha/events/backfill-variant` — 回填 `hook_variant_id`（需 `MAINTENANCE_TOKEN`）
 - `POST /api/handout/generate` — 講義 Markdown（Gemini，可附圖）
 - `POST /api/handout/preview-html` — A4 可列印 HTML
 - `GET /notes`、`POST /notes`、`PUT /notes/{id}`、`DELETE /notes/{id}` — 筆記 CRUD

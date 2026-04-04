@@ -59,7 +59,6 @@ body {
 /* ── Buttons: press feedback ───────────────────────────── */
 @layer base {
   button { @apply transition-all duration-100; }
-  button:not(:disabled):active { transform: scale(0.97); }
   input, textarea, select { @apply transition-colors duration-100; }
 }
 
@@ -144,74 +143,16 @@ select option {
   border-radius: 2px !important;
 }
 
-/* Colored gradient buttons → minimal black buttons */
-[class*="bg-gradient-to-r"],
-[class*="bg-gradient-to-br"],
-[class*="bg-indigo-"],
-[class*="bg-violet-"],
-[class*="bg-emerald-"],
-[class*="bg-sky-"],
-[class*="bg-amber-"],
-[class*="bg-rose-"],
-[class*="bg-accent"] {
-  background: #000 !important;
-  background-image: none !important;
-  color: #fff !important;
-  border-color: #000 !important;
-}
-[class*="bg-gradient-to-r"]:hover:not(:disabled),
-[class*="bg-gradient-to-br"]:hover:not(:disabled),
-[class*="bg-indigo-"]:hover:not(:disabled),
-[class*="bg-violet-"]:hover:not(:disabled),
-[class*="bg-emerald-"]:hover:not(:disabled),
-[class*="bg-sky-"]:hover:not(:disabled),
-[class*="bg-amber-"]:hover:not(:disabled),
-[class*="bg-rose-"]:hover:not(:disabled) {
-  background: #333 !important;
-  background-image: none !important;
-}
+/* ── Color normalization ──────────────────────────────────
+   Neutralise leftover dark-theme color classes to minimal palette.
+   Uses targeted selectors instead of broad [class*=""] matching. */
+@layer base {
+  .bg-gradient-to-r, .bg-gradient-to-br { background-image: none !important; background: #000 !important; color: #fff !important; }
+  .bg-gradient-to-r:hover:not(:disabled), .bg-gradient-to-br:hover:not(:disabled) { background: #333 !important; }
 
-/* Remove all colored text accents */
-[class*="text-emerald-"],
-[class*="text-violet-"],
-[class*="text-sky-"],
-[class*="text-indigo-"],
-[class*="text-amber-"],
-[class*="text-fuchsia-"],
-[class*="text-rose-"],
-[class*="text-red-"],
-[class*="text-accent"] {
-  color: #222 !important;
-}
-/* Exception: red/rose for actual error states */
-.text-red-300, .text-red-400 { color: #c00 !important; }
-.text-emerald-300, .text-emerald-400 { color: #090 !important; }
-.text-amber-200, .text-amber-100 { color: #660 !important; }
-
-/* Remove colored borders */
-[class*="border-emerald-"],
-[class*="border-violet-"],
-[class*="border-sky-"],
-[class*="border-indigo-"],
-[class*="border-amber-"],
-[class*="border-fuchsia-"],
-[class*="border-rose-"],
-[class*="border-accent"] {
-  border-color: #ccc !important;
-}
-[class*="border-red-"] { border-color: #f88 !important; }
-
-/* Colored panel backgrounds → white */
-[class*="bg-emerald-"],
-[class*="bg-violet-"],
-[class*="bg-sky-"],
-[class*="bg-indigo-"],
-[class*="bg-amber-"],
-[class*="bg-fuchsia-"],
-[class*="bg-rose-"],
-[class*="bg-red-"] {
-  background-color: #f8f8f8 !important;
-  background-image: none !important;
+  .text-red-600 { color: #c00 !important; }
+  .text-green-700 { color: #090 !important; }
+  .border-red-600 { border-color: #c00 !important; }
 }
 
 /* ring colors */

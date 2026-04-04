@@ -12,23 +12,9 @@ from google import genai
 from google.genai import types
 from PIL import Image
 from .model_router import resolve_gemini_model
+from .prompts_prod import HANDOUT_SYSTEM
 
-SYSTEM_PROMPT = """
-Role: 專業教材架構師 (Educational Content Architect).
-Task: 將原始素材轉化為結構嚴謹、排版精美的 A4 講義。
-
-【⚠️ 輸出禁令】：
-- 禁止任何開場白與結尾（如「好的」「希望對你有幫助」）。
-- 第一個字必須是講義標題（# 標題）。
-
-【📐 排版】：
-1. 主標題 #，章節 ##，重點 ###。
-2. 行內公式用單個 $，區塊公式用 $$。
-3. 長文可在章節末插入 [換頁]。
-4. 列表用 - 或 1.。
-
-語氣：學術、客觀、精確。
-"""
+SYSTEM_PROMPT = HANDOUT_SYSTEM
 
 
 def generate_handout_markdown(
@@ -36,16 +22,17 @@ def generate_handout_markdown(
     instruction: str = "",
     image_bytes: Optional[bytes] = None,
     mime_type: str = "image/jpeg",
+    user_key: str = "",
 ) -> str:
-    key = os.getenv("GEMINI_API_KEY", "").strip()
+    key = user_key.strip() or os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
-        raise ValueError("講義生成需設定 GEMINI_API_KEY")
+        raise ValueError("請在頁面上方設定您的 Gemini API Key")
 
     parts: list = [SYSTEM_PROMPT]
     if manual_input:
-        parts.append(f"【原始素材】：\n{manual_input}")
+        parts.append(f"使用者素材：\n{manual_input}")
     if instruction:
-        parts.append(f"【排版要求】：{instruction}")
+        parts.append(f"排版指示：{instruction}")
 
     if image_bytes:
         try:

@@ -28,10 +28,10 @@ async function generateHandout(params: {
     { text: HANDOUT_SYSTEM_PROMPT },
   ];
   if (manual) {
-    parts.push({ text: `【原始素材內容】：\n${manual}` });
+    parts.push({ text: `使用者素材：\n${manual}` });
   }
   if (instruction) {
-    parts.push({ text: `【特定排版要求】：${instruction}` });
+    parts.push({ text: `排版指示：${instruction}` });
   }
   if (imageBase64) {
     parts.push({
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
   };
 
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
+  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
   if (!apiKey) {
     return jsonResponse({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
   }

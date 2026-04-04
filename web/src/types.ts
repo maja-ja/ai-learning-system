@@ -36,3 +36,38 @@ export type ExamSearchHit = {
   unit: string;
   snippet: string;
 };
+
+export type ContributionMode = "named_contribution" | "private_use";
+
+export type CreditPack = {
+  key: string;
+  label: string;
+  amountTwd: number;
+  credits: number;
+  recommended?: boolean;
+};
+
+export type MembershipBootstrap = {
+  profile: {
+    id: string;
+    email: string;
+    displayName: string;
+  };
+  tenant: {
+    id: string;
+  };
+  subscription: {
+    planKey: string;
+    status: string;
+    currentPeriodEnd: string | null;
+  };
+  wallet: {
+    creditsBalance: number;
+  };
+  access: {
+    canGenerate: boolean;
+    contributorLabel: string;
+  };
+  backendToken: string;
+  packs: CreditPack[];
+};

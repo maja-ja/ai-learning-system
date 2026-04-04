@@ -18,66 +18,8 @@ class KnowledgeCard(BaseModel):
     phonetic: str = Field(description="音標或詞源")
 
 
-AgeBand = Literal["under_13", "13_15", "16_18", "19_22", "23_plus"]
-HookType = Literal[
-    "analogy",
-    "story",
-    "visual",
-    "misconception_fix",
-    "exam_shortcut",
-    "cold_fact",
-    "counterexample",
-    "interactive_sim",
-]
-AhaEventType = Literal[
-    "confused",
-    "hint_shown",
-    "aha_reported",
-    "question_answered",
-    "question_corrected",
-    "review_passed",
-]
-
-
-class LearnerContextUpsertBody(BaseModel):
-    tenant_id: str
-    profile_id: str
-    age_band: AgeBand
-    region_code: str = Field(min_length=2, max_length=32)
-    preferred_language: str = Field(default="zh-TW", min_length=2, max_length=16)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class AhaHookRecommendQuery(BaseModel):
-    tenant_id: str
-    profile_id: str
-    topic_key: str = Field(min_length=1, max_length=120)
-    limit: int = Field(default=5, ge=1, le=20)
-
-
-class AhaEventIngestBody(BaseModel):
-    tenant_id: str
-    profile_id: str
-    attempt_id: Optional[str] = None
-    event_type: AhaEventType
-    topic_key: str = Field(min_length=1, max_length=120)
-    question_id: Optional[str] = None
-    hook_id: Optional[str] = None
-    hook_variant_id: Optional[str] = Field(default=None, max_length=120)
-    self_report_delta: Optional[int] = Field(default=None, ge=-5, le=5)
-    latency_ms: Optional[int] = Field(default=None, ge=0)
-    is_correct: Optional[bool] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class AhaEventBatchIngestBody(BaseModel):
-    events: List[AhaEventIngestBody] = Field(default_factory=list, max_length=200)
-
-
-class MaintenanceBackfillVariantBody(BaseModel):
-    tenant_id: Optional[str] = None
-    limit: int = Field(default=500, ge=1, le=5000)
-    dry_run: bool = True
+ContributionMode = Literal["private_use", "named_contribution"]
+LearningAttemptSource = Literal["lab", "exam", "knowledge", "handout", "other"]
 
 
 class ClickEventItem(BaseModel):
@@ -85,8 +27,11 @@ class ClickEventItem(BaseModel):
     action_label: str = Field(default="", max_length=200)
     page: str = Field(default="", max_length=100)
     seq: int = Field(default=0, ge=0)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ClickEventsBatchBody(BaseModel):
     session_id: str = Field(min_length=8, max_length=64)
+    tenant_id: Optional[str] = None
+    profile_id: Optional[str] = None
     events: List[ClickEventItem] = Field(default_factory=list, max_length=500)
